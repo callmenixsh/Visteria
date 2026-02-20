@@ -2,16 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, TrendingUp, Users, Globe } from 'lucide-react'
 
-function normalizeBaseUrl(value) {
-  return value.trim().replace(/\/+$/, '')
-}
-
-function buildApiUrl(baseUrl, path) {
-  const normalizedBase = normalizeBaseUrl(baseUrl)
-  if (!normalizedBase) return ''
-  if (normalizedBase.toLowerCase().endsWith('/api')) return `${normalizedBase}${path}`
-  return `${normalizedBase}/api${path}`
-}
+const API_BASE_URL = 'https://visteria.vercel.app'
 
 export default function Dashboard() {
   const [projects, setProjects] = useState([])
@@ -23,18 +14,16 @@ export default function Dashboard() {
   }, [])
 
   async function loadProjects() {
-    const apiBaseUrl = localStorage.getItem('visteria.apiBaseUrl') || ''
-    const apiKey = localStorage.getItem('visteria.apiKey') || ''
+    const apiKey = import.meta.env.VITE_TRACKING_API_KEY || ''
 
-    if (!apiBaseUrl || !apiKey) {
-      setError('Please configure API settings first')
+    if (!apiKey) {
+      setError('Please set VITE_TRACKING_API_KEY in environment variables')
       setLoading(false)
       return
     }
 
     try {
-      const url = buildApiUrl(apiBaseUrl, '/projects')
-      const response = await fetch(url, {
+      const response = await fetch(`${API_BASE_URL}/api/projects`, {
         method: 'GET',
         mode: 'cors',
         headers: {

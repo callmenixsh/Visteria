@@ -21,7 +21,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { siteId, siteName, url, referrer, userAgent, visitedAt } = req.body || {}
+    const { siteId, siteName, siteUrl, url, referrer, userAgent, visitedAt } = req.body || {}
 
     if (!siteId || !url) {
       return res.status(400).json({ error: 'siteId and url are required.' })
@@ -30,6 +30,7 @@ export default async function handler(req, res) {
     const safeVisitedAt = normalizeIsoDate(visitedAt) || new Date()
     const safeSiteId = String(siteId).trim()
     const safeSiteName = String(siteName || safeSiteId).trim()
+    const safeSiteUrl = siteUrl ? String(siteUrl).trim() : null
     const safeUrl = String(url)
     const safeReferrer = String(referrer || '')
     const safeUserAgent = String(userAgent || req.headers['user-agent'] || '')
@@ -37,32 +38,39 @@ export default async function handler(req, res) {
 
     const visitsCollection = await getVisitsCollection()
 
-    await visitsCollection.updateOne(
-      { siteId: safeSiteId, visitorHash },
-      {
-        $setOnInsert: {
-          siteId: safeSiteId,
-          visitorHash,
-          firstSeenAt: new Date(),
-        },
-        $set: {
-          siteName: safeSiteName,
-          lastSeenAt: new Date(),
-          lastUserAgent: safeUserAgent,
-        },
-        $push: {
-          visits: {
-            $each: [
-              {
-                url: safeUrl,
-                referrer: safeReferrer,
-                visitedAt: safeVisitedAt,
-              },
-            ],
-            $slice: -1000,
-          },
+    const updateDoc = {
+      $setOnInsert: {
+        siteId: safeSiteId,
+        visitorHash,
+        firstSeenAt: new Date(),
+      },
+      $set: {
+        siteName: safeSiteName,
+        lastSeenAt: new Date(),
+        lastUserAgent: safeUserAgent,
+      },
+      $push: {
+        visits: {
+          $each: [
+            {
+              url: safeUrl,
+              referrer: safeReferrer,
+              visitedAt: safeVisitedAt,
+            },
+          ],
+          $slice: -1000,
         },
       },
+    }
+
+    // Only set siteUrl if provided (don't overwrite with null)
+    if (safeSiteUrl) {
+      updateDoc.$set.siteUrl = safeSiteUrl
+    }
+
+    await visitsCollection.updateOne(
+      { siteId: safeSiteId, visitorHash },
+      updateDoc,
       { upsert: true },
     )
 

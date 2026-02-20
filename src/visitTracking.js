@@ -1,4 +1,5 @@
 const DUPLICATE_WINDOW_MS = 2000
+const API_BASE_URL = 'https://visteria.vercel.app'
 
 let lastTrackedUrl = ''
 let lastTrackedAt = 0
@@ -11,24 +12,13 @@ function getRuntimeConfig() {
   return window.__VISTERIA_TRACKING_CONFIG__ || {}
 }
 
-function normalizeBaseUrl(value) {
-  return String(value || '').trim().replace(/\/+$/, '')
-}
-
 function getTrackingConfig(configOverride = {}) {
   const runtimeConfig = getRuntimeConfig()
-  const overrideBaseUrl = configOverride.apiBaseUrl || configOverride.baseUrl || ''
-  const overrideApiKey = configOverride.apiKey || ''
   const overrideSiteId = configOverride.siteId || ''
-  const runtimeBaseUrl = overrideBaseUrl || runtimeConfig.apiBaseUrl || runtimeConfig.baseUrl || ''
-  const runtimeApiKey = overrideApiKey || runtimeConfig.apiKey || ''
   const runtimeSiteId = overrideSiteId || runtimeConfig.siteId || ''
 
   return {
-    baseUrl: normalizeBaseUrl(
-      runtimeBaseUrl || getEnvValue('VITE_TRACKING_API_BASE_URL', 'TRACKING_API_BASE_URL'),
-    ),
-    apiKey: String(runtimeApiKey || getEnvValue('VITE_TRACKING_API_KEY', 'TRACKING_API_KEY')).trim(),
+    baseUrl: API_BASE_URL,
     siteId:
       String(runtimeSiteId || getEnvValue('VITE_TRACKING_SITE_ID', 'TRACKING_SITE_ID')).trim() ||
       window.location.hostname,
@@ -64,12 +54,11 @@ function sendWithBeacon(endpoint, payload) {
   return navigator.sendBeacon(endpoint, body)
 }
 
-function sendWithFetch(endpoint, payload, apiKey) {
+function sendWithFetch(endpoint, payload) {
   return fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(apiKey ? { 'x-api-key': apiKey } : {}),
     },
     body: JSON.stringify(payload),
     keepalive: true,
@@ -82,7 +71,7 @@ export function trackVisit(configOverride = {}) {
       return
     }
 
-    const { baseUrl, apiKey, siteId } = getTrackingConfig(configOverride)
+    const { baseUrl, siteId } = getTrackingConfig(configOverride)
     if (!baseUrl || !siteId) {
       return
     }
@@ -102,11 +91,11 @@ export function trackVisit(configOverride = {}) {
 
     const endpoint = `${baseUrl}/api/visits/track`
 
-    if (!apiKey && sendWithBeacon(endpoint, payload)) {
+    if (sendWithBeacon(endpoint, payload)) {
       return
     }
 
-    sendWithFetch(endpoint, payload, apiKey).catch(() => {})
+    sendWithFetch(endpoint, payload).catch(() => {})
   } catch {
     return
   }

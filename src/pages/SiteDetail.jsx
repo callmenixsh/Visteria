@@ -2,22 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, ExternalLink, Users, Globe } from 'lucide-react'
 
-function normalizeBaseUrl(value) {
-  return value.trim().replace(/\/+$/, '')
-}
-
-function buildApiUrl(baseUrl, path) {
-  const normalizedBase = normalizeBaseUrl(baseUrl)
-  if (!normalizedBase) {
-    return ''
-  }
-
-  if (normalizedBase.toLowerCase().endsWith('/api')) {
-    return `${normalizedBase}${path}`
-  }
-
-  return `${normalizedBase}/api${path}`
-}
+const API_BASE_URL = 'https://visteria.vercel.app'
 
 function isToday(date) {
   const today = new Date()
@@ -70,17 +55,16 @@ export default function SiteDetail() {
   }, [siteId])
 
   async function loadSiteDetails() {
-    const apiBaseUrl = localStorage.getItem('visteria.apiBaseUrl') || ''
-    const apiKey = localStorage.getItem('visteria.apiKey') || ''
+    const apiKey = import.meta.env.VITE_TRACKING_API_KEY || ''
 
-    if (!apiBaseUrl || !apiKey) {
-      setError('Please configure API settings first')
+    if (!apiKey) {
+      setError('Please set VITE_TRACKING_API_KEY in environment variables')
       setLoading(false)
       return
     }
 
     try {
-      const response = await fetch(buildApiUrl(apiBaseUrl, `/sites/${encodeURIComponent(siteId)}`), {
+      const response = await fetch(`${API_BASE_URL}/api/sites/${encodeURIComponent(siteId)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -250,7 +234,7 @@ export default function SiteDetail() {
   }
 
   // Build site URL from siteId (assume it's a domain or hostname)
-  const siteUrl = site.siteId.includes('://') ? site.siteId : `https://${site.siteId}.netlify.app`
+  const siteUrl = site.siteUrl || (site.siteId.includes('.') ? `https://${site.siteId}` : null)
 
   return (
     <div className="space-y-4">
@@ -263,15 +247,17 @@ export default function SiteDetail() {
           </Link>
           <h1 className="text-xl font-semibold text-black dark:text-white truncate">{site.siteName || site.siteId}</h1>
         </div>
-        <a
-          href={siteUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white border border-black/10 dark:border-white/10 rounded-lg hover:border-black/20 dark:hover:border-white/20 transition-colors"
-        >
-          Visit
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
+        {siteUrl && (
+          <a
+            href={siteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white border border-black/10 dark:border-white/10 rounded-lg hover:border-black/20 dark:hover:border-white/20 transition-colors"
+          >
+            Visit
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
       </div>
 
       {/* Primary Stats */}

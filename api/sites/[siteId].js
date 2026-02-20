@@ -33,10 +33,14 @@ export default async function handler(req, res) {
       .sort({ lastSeenAt: -1 })
       .toArray()
 
+    // Get siteUrl from stored data (first visitor that has it)
+    const siteUrl = visitors.find(v => v.siteUrl)?.siteUrl || null
+
     const siteInfo = visitors.length > 0
       ? {
           siteId,
           siteName: visitors[0].siteName || siteId,
+          siteUrl,
           totalVisits: visitors.reduce((sum, v) => sum + (v.visits?.length || 0), 0),
           uniqueVisitors: visitors.length,
         }

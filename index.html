@@ -21,20 +21,19 @@
 			(function () {
 				const config = {
 					baseUrl: "https://visteria.vercel.app",
-					siteId: "Visteria" || location.hostname,
+					siteId: "Visteria",
+					siteUrl: "https://visteria.vercel.app",
 				};
 				const key = "visteria_" + config.siteId;
 				if (sessionStorage.getItem(key)) return;
 				sessionStorage.setItem(key, "1");
-				const endpoint =
-					config.baseUrl +
-					(config.baseUrl.endsWith("/api") ? "" : "/api") +
-					"/visits/track";
+				const endpoint = config.baseUrl + "/api/visits/track";
 				fetch(endpoint, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
 						siteId: config.siteId,
+						siteUrl: config.siteUrl,
 						url: location.href,
 						referrer: document.referrer,
 						userAgent: navigator.userAgent,

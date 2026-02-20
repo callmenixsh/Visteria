@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Copy, Check } from 'lucide-react'
 
 function normalizeBaseUrl(value) {
   return value.trim().replace(/\/+$/, '')
@@ -6,60 +7,38 @@ function normalizeBaseUrl(value) {
 
 function buildApiUrl(baseUrl, path) {
   const normalizedBase = normalizeBaseUrl(baseUrl)
-  if (!normalizedBase) {
-    return ''
-  }
-
-  if (normalizedBase.toLowerCase().endsWith('/api')) {
-    return `${normalizedBase}${path}`
-  }
-
+  if (!normalizedBase) return ''
+  if (normalizedBase.toLowerCase().endsWith('/api')) return `${normalizedBase}${path}`
   return `${normalizedBase}/api${path}`
 }
 
 function buildTrackingSnippet(baseUrl, siteId) {
   const safeBaseUrl = normalizeBaseUrl(baseUrl) || 'https://your-api-domain.com'
   const safeSiteId = siteId || ''
-  const trackEndpoint = buildApiUrl(safeBaseUrl, '/visits/track')
 
-  return `<!-- Visteria tracking -->
-<script type="module">
-  window.__VISTERIA_TRACKING_CONFIG__ = {
-    apiBaseUrl: import.meta.env.VITE_TRACKING_API_BASE_URL || '${safeBaseUrl}',
-    apiKey: import.meta.env.VITE_TRACKING_API_KEY || '',
-    siteId: import.meta.env.VITE_TRACKING_SITE_ID || '${safeSiteId}',
+  return `<script type="module">
+(function() {
+  const config = {
+    baseUrl: '${safeBaseUrl}',
+    siteId: '${safeSiteId}' || location.hostname
   };
-
-  (function trackVisit() {
-    const config = window.__VISTERIA_TRACKING_CONFIG__ || {};
-    const baseUrl = (config.apiBaseUrl || '').replace(/\\/+$/, '');
-    const apiKey = config.apiKey || '';
-    const siteId = config.siteId || window.location.hostname;
-
-    if (!baseUrl || !siteId) return;
-
-    const endpoint = baseUrl.toLowerCase().endsWith('/api')
-      ? baseUrl + '/visits/track'
-      : baseUrl + '/api/visits/track';
-
-    const payload = {
-      siteId: siteId,
-      url: window.location.href,
+  const key = 'visteria_' + config.siteId;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  const endpoint = config.baseUrl + (config.baseUrl.endsWith('/api') ? '' : '/api') + '/visits/track';
+  fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      siteId: config.siteId,
+      url: location.href,
       referrer: document.referrer,
       userAgent: navigator.userAgent,
-      visitedAt: new Date().toISOString(),
-    };
-
-    const headers = { 'Content-Type': 'application/json' };
-    if (apiKey) headers['x-api-key'] = apiKey;
-
-    fetch(endpoint, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(payload),
-      keepalive: true,
-    }).catch(function () {});
-  })();
+      visitedAt: new Date().toISOString()
+    }),
+    keepalive: true
+  }).catch(() => {});
+})();
 </script>`
 }
 
@@ -67,145 +46,103 @@ export default function Settings() {
   const [apiBaseUrl, setApiBaseUrl] = useState(() => localStorage.getItem('visteria.apiBaseUrl') || '')
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('visteria.apiKey') || '')
   const [siteId, setSiteId] = useState('')
-  const [message, setMessage] = useState('')
+  const [copied, setCopied] = useState('')
 
   const trackingSnippet = useMemo(() => buildTrackingSnippet(apiBaseUrl, siteId), [apiBaseUrl, siteId])
-  const envExample = useMemo(
-    () => `# Visteria Tracking Configuration
-VITE_TRACKING_API_BASE_URL=${normalizeBaseUrl(apiBaseUrl) || 'https://your-api-domain.com'}
-VITE_TRACKING_API_KEY=${apiKey || 'YOUR_API_KEY'}
-VITE_TRACKING_SITE_ID=${siteId || 'your-site-id'}`,
-    [apiBaseUrl, apiKey, siteId],
+  const envExample = useMemo(() => 
+    `VITE_TRACKING_API_BASE_URL=${normalizeBaseUrl(apiBaseUrl) || 'https://your-api.com'}\nVITE_TRACKING_API_KEY=${apiKey || 'YOUR_API_KEY'}\nVITE_TRACKING_SITE_ID=${siteId || 'your-site-id'}`,
+    [apiBaseUrl, apiKey, siteId]
   )
 
   function saveConfig() {
     localStorage.setItem('visteria.apiBaseUrl', normalizeBaseUrl(apiBaseUrl))
     localStorage.setItem('visteria.apiKey', apiKey.trim())
-    setMessage('Configuration saved successfully!')
-    setTimeout(() => setMessage(''), 3000)
+    setCopied('saved')
+    setTimeout(() => setCopied(''), 2000)
   }
 
-  function copySnippet() {
-    navigator.clipboard.writeText(trackingSnippet)
-    setMessage('Tracking snippet copied to clipboard!')
-    setTimeout(() => setMessage(''), 3000)
-  }
-
-  function copyEnvExample() {
-    navigator.clipboard.writeText(envExample)
-    setMessage('Env example copied to clipboard!')
-    setTimeout(() => setMessage(''), 3000)
+  function copyToClipboard(text, type) {
+    navigator.clipboard.writeText(text)
+    setCopied(type)
+    setTimeout(() => setCopied(''), 2000)
   }
 
   return (
-    <div className="space-y-8 max-w-4xl">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-black dark:text-white">Settings</h1>
-        <p className="text-black/60 dark:text-white/60 mt-1 text-sm sm:text-base">Configure your API and tracking</p>
-      </div>
+    <div className="space-y-6 max-w-2xl mx-auto">
+      <h1 className="text-2xl font-semibold text-black dark:text-white">Settings</h1>
 
-      {message && (
-        <div className="bg-white dark:bg-black border border-black/10 dark:border-white/10 rounded-lg p-4">
-          <p className="text-black dark:text-white font-medium text-sm sm:text-base">{message}</p>
-        </div>
-      )}
-
-      <div className="bg-white dark:bg-black rounded-xl shadow-sm border border-black/10 dark:border-white/10 p-6 sm:p-8">
-        <h2 className="text-lg sm:text-xl font-semibold text-black dark:text-white mb-4 sm:mb-6">API Configuration</h2>
-
-        <div className="space-y-4">
+      {/* API Config */}
+      <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-5">
+        <h2 className="text-sm font-medium text-black dark:text-white mb-4">API Configuration</h2>
+        <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-black/70 dark:text-white/70 mb-2">
-              API Base URL
-            </label>
+            <label className="block text-xs font-medium text-black/60 dark:text-white/60 mb-1.5">Base URL</label>
             <input
               type="text"
-              placeholder="https://your-api-domain.com"
+              placeholder="https://your-api.com"
               value={apiBaseUrl}
               onChange={(e) => setApiBaseUrl(e.target.value)}
-              className="w-full px-4 py-2 border border-black/20 dark:border-white/20 rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-black dark:focus:border-white outline-none transition-colors bg-white dark:bg-black text-black dark:text-white placeholder-black/40 dark:placeholder-white/40"
+              className="w-full px-3 py-2 text-sm border border-black/10 dark:border-white/10 rounded-lg bg-transparent text-black dark:text-white placeholder-black/30 dark:placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 transition"
             />
-            <p className="mt-1 text-sm text-black/50 dark:text-white/50">
-              The base URL of your Visteria API server (without trailing slash)
-            </p>
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-black/70 dark:text-white/70 mb-2">
-              API Key
-            </label>
+            <label className="block text-xs font-medium text-black/60 dark:text-white/60 mb-1.5">API Key</label>
             <input
               type="password"
-              placeholder="Paste your API key"
+              placeholder="Your API key"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              className="w-full px-4 py-2 border border-black/20 dark:border-white/20 rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-black dark:focus:border-white outline-none transition-colors bg-white dark:bg-black text-black dark:text-white placeholder-black/40 dark:placeholder-white/40"
+              className="w-full px-3 py-2 text-sm border border-black/10 dark:border-white/10 rounded-lg bg-transparent text-black dark:text-white placeholder-black/30 dark:placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 transition"
             />
-            <p className="mt-1 text-sm text-black/50 dark:text-white/50">
-              Your API key for authentication (stored locally in browser)
-            </p>
           </div>
-
           <button
             onClick={saveConfig}
-            className="px-6 py-2.5 bg-black text-white dark:bg-white dark:text-black rounded-lg hover:bg-black/80 dark:hover:bg-white/90 transition-colors font-medium shadow-sm"
+            className="px-4 py-2 text-sm font-medium bg-black text-white dark:bg-white dark:text-black rounded-lg hover:opacity-90 active:scale-[0.98] transition-all"
           >
-            Save Configuration
+            {copied === 'saved' ? 'Saved!' : 'Save'}
           </button>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-black rounded-xl shadow-sm border border-black/10 dark:border-white/10 p-6 sm:p-8">
-        <h2 className="text-lg sm:text-xl font-semibold text-black dark:text-white mb-4 sm:mb-6">Tracking Snippet</h2>
-
-        <div className="space-y-4">
+      {/* Tracking Snippet */}
+      <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-5">
+        <h2 className="text-sm font-medium text-black dark:text-white mb-4">Tracking Snippet</h2>
+        <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-black/70 dark:text-white/70 mb-2">
-              Site ID (optional)
-            </label>
+            <label className="block text-xs font-medium text-black/60 dark:text-white/60 mb-1.5">Site ID <span className="font-normal">(optional, defaults to hostname)</span></label>
             <input
               type="text"
               placeholder="my-portfolio"
               value={siteId}
               onChange={(e) => setSiteId(e.target.value)}
-              className="w-full px-4 py-2 border border-black/20 dark:border-white/20 rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-black dark:focus:border-white outline-none transition-colors bg-white dark:bg-black text-black dark:text-white placeholder-black/40 dark:placeholder-white/40"
+              className="w-full px-3 py-2 text-sm border border-black/10 dark:border-white/10 rounded-lg bg-transparent text-black dark:text-white placeholder-black/30 dark:placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20 transition"
             />
-            <p className="mt-1 text-sm text-black/50 dark:text-white/50">
-              Leave empty to auto-detect from hostname
-            </p>
           </div>
-
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-black/70 dark:text-white/70">
-                Code Snippet
-              </label>
-              <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-black/60 dark:text-white/60">Code</label>
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={copyEnvExample}
-                  className="text-black dark:text-white hover:text-black/70 dark:hover:text-white/80 font-medium underline"
+                  onClick={() => copyToClipboard(envExample, 'env')}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white transition"
                 >
-                  Copy .env
+                  {copied === 'env' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied === 'env' ? 'Copied' : '.env'}
                 </button>
                 <button
-                  onClick={copySnippet}
-                  className="text-black dark:text-white hover:text-black/70 dark:hover:text-white/80 font-medium underline"
+                  onClick={() => copyToClipboard(trackingSnippet, 'snippet')}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white transition"
                 >
-                  Copy Snippet
+                  {copied === 'snippet' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied === 'snippet' ? 'Copied' : 'Snippet'}
                 </button>
               </div>
             </div>
-            <textarea
-              value={trackingSnippet}
-              readOnly
-              rows={15}
-              className="w-full px-4 py-3 border border-black/20 dark:border-white/20 rounded-lg bg-white dark:bg-black font-mono text-sm outline-none text-black dark:text-white"
-            />
-            <pre className="mt-2 text-xs sm:text-sm text-black/50 dark:text-white/50 font-mono whitespace-pre-wrap break-all">
-              {envExample}
+            <pre className="p-3 text-xs font-mono bg-black/[0.03] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 rounded-lg overflow-x-auto text-black/80 dark:text-white/80 leading-relaxed">
+              {trackingSnippet}
             </pre>
-            <p className="mt-2 text-sm text-black/50 dark:text-white/50">
-              Paste this snippet before the closing {'</body>'} tag on each website you want to track
+            <p className="mt-2 text-xs text-black/40 dark:text-white/40">
+              Add before {'</body>'} on pages you want to track
             </p>
           </div>
         </div>

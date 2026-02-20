@@ -2,6 +2,18 @@
 
 A React dashboard for tracking visits across your own websites.
 
+## Deploy to Vercel (Recommended)
+
+1. Push your code to GitHub
+2. Import the repo in [Vercel](https://vercel.com/new)
+3. Add environment variables in Vercel dashboard:
+   - `VISTERIA_API_KEY` - your secret API key
+   - `MONGODB_URI` - MongoDB Atlas connection string
+   - `MONGODB_DB_NAME` - database name (default: visteria)
+4. Deploy!
+
+Your app will be available at `https://your-app.vercel.app`
+
 ## Local development
 
 ```bash
@@ -9,7 +21,7 @@ npm install
 npm run dev
 ```
 
-## Backend (new)
+## Backend (local)
 
 1. Create a local env file:
 

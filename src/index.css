@@ -3,18 +3,31 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  font-family: Inter, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', monospace;
 }
 
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* Better number rendering */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mono font utility */
+.font-mono {
+  font-family: var(--font-mono);
 }
 
 @keyframes fade-up {
   0% {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   100% {
     opacity: 1;
@@ -23,6 +36,18 @@ body {
 }
 
 .animate-fade-up {
-  animation: fade-up 240ms ease-out both;
+  animation: fade-up 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Subtle hover lift */
+.hover-lift {
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.dark .hover-lift:hover {
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.05);
 }
 

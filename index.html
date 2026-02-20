@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Visteria visit tracking dashboard for your personal projects." />
     <title>Visteria | Visit Tracking</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>
@@ -23,6 +26,11 @@
         const siteId = config.siteId || window.location.hostname;
 
         if (!baseUrl || !siteId) return;
+
+        // Session-based deduplication
+        const sessionKey = 'visteria_visited_' + siteId;
+        if (sessionStorage.getItem(sessionKey)) return;
+        sessionStorage.setItem(sessionKey, '1');
 
         const endpoint = baseUrl.toLowerCase().endsWith('/api')
           ? baseUrl + '/visits/track'

@@ -12,6 +12,26 @@ function buildTrackingSnippet(siteId, siteUrl) {
   const SITE_ID = '${safeSiteId}';
   const SITE_URL = '${safeSiteUrl}';
   const COOLDOWN_MS = 2000;
+
+  const createVisitorId = () => {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+    return 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+  };
+
+  const getVisitorId = () => {
+    try {
+      const key = 'visteria_vid_' + SITE_ID;
+      const existing = localStorage.getItem(key);
+      if (existing) return existing;
+      const created = createVisitorId();
+      localStorage.setItem(key, created);
+      return created;
+    } catch {
+      return createVisitorId();
+    }
+  };
   
   const lastTracked = sessionStorage.getItem('visteria_last_' + SITE_ID);
   const now = Date.now();
@@ -30,6 +50,7 @@ function buildTrackingSnippet(siteId, siteUrl) {
     body: JSON.stringify({
       siteId: SITE_ID,
       siteUrl: SITE_URL,
+      visitorId: getVisitorId(),
       url: location.href,
       referrer: document.referrer,
       userAgent: navigator.userAgent,

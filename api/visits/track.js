@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   // Track endpoint is public - no auth required
 
   try {
-    const { siteId, siteName, siteUrl, url, referrer, userAgent, visitedAt } = req.body || {}
+    const { siteId, siteName, siteUrl, url, referrer, userAgent, visitedAt, visitorId } = req.body || {}
 
     if (!siteId || !url) {
       return res.status(400).json({ error: 'siteId and url are required.' })
@@ -31,7 +31,8 @@ export default async function handler(req, res) {
     const safeUrl = String(url)
     const safeReferrer = String(referrer || '')
     const safeUserAgent = String(userAgent || req.headers['user-agent'] || '')
-    const visitorHash = buildVisitorHash(req, safeSiteId)
+    const safeVisitorId = String(visitorId || '').trim()
+    const visitorHash = buildVisitorHash(req, safeSiteId, safeVisitorId)
 
     const visitsCollection = await getVisitsCollection()
 
@@ -88,7 +89,11 @@ function normalizeIsoDate(value) {
   return date
 }
 
-function buildVisitorHash(req, siteId) {
+function buildVisitorHash(req, siteId, visitorId) {
+  if (visitorId) {
+    return crypto.createHash('sha256').update(`${siteId}|vid|${visitorId}`).digest('hex')
+  }
+
   const forwardedFor = String(req.headers['x-forwarded-for'] || '')
   const ip = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || ''
   const userAgent = String(req.headers['user-agent'] || '')

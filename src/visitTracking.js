@@ -65,6 +65,30 @@ function sendWithFetch(endpoint, payload) {
   })
 }
 
+function createVisitorId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  return `v_${Date.now()}_${Math.random().toString(36).slice(2)}`
+}
+
+function getVisitorId(siteId) {
+  try {
+    const key = `visteria_vid_${siteId}`
+    const existing = localStorage.getItem(key)
+    if (existing) {
+      return existing
+    }
+
+    const created = createVisitorId()
+    localStorage.setItem(key, created)
+    return created
+  } catch {
+    return createVisitorId()
+  }
+}
+
 export function trackVisit(configOverride = {}) {
   try {
     if (!hasConsent()) {
@@ -88,6 +112,7 @@ export function trackVisit(configOverride = {}) {
 
     const payload = {
       siteId,
+      visitorId: getVisitorId(siteId),
       url: currentUrl,
       referrer: document.referrer || '',
       userAgent: navigator.userAgent,

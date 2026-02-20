@@ -93,11 +93,7 @@ export default function Layout({ children }) {
             </div>
           </div>
           
-          <div className="mt-4 pt-4 border-t border-black/[0.04] dark:border-white/[0.04] flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p className="text-xs text-black/30 dark:text-white/30">
-              © {new Date().getFullYear()} Visteria. Open source.
-            </p>
-            <p className="text-xs text-black/30 dark:text-white/30 flex items-center gap-1">
+            <p className="text-xs text-black/30 dark:text-white/30 flex justify-center gap-1 mt-5">
               Made with <Heart className="w-3 h-3 text-black/40 dark:text-white/40" /> by{' '}
               <a 
                 href="https://github.com/callmenixsh" 
@@ -108,7 +104,6 @@ export default function Layout({ children }) {
                 @callmenixsh
               </a>
             </p>
-          </div>
         </div>
       </footer>
     </div>

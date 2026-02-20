@@ -12,12 +12,45 @@ function isToday(date) {
 export default function Dashboard() {
   const [projects, setProjects] = useState([])
   const [allVisitors, setAllVisitors] = useState([])
+  const [siteVisitorsMap, setSiteVisitorsMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // Calculate global stats from projects (must be before conditional returns)
+  const displayedProjects = useMemo(() => {
+    return projects.map((project) => {
+      const visitors = siteVisitorsMap[project.siteId] || []
+
+      if (!visitors.length) {
+        return project
+      }
+
+      let totalVisits = 0
+      let todayVisits = 0
+
+      visitors.forEach((visitor) => {
+        const visits = visitor.visits || []
+        totalVisits += visits.length
+
+        visits.forEach((visit) => {
+          const visitDate = new Date(visit.visitedAt)
+          if (isToday(visitDate)) {
+            todayVisits++
+          }
+        })
+      })
+
+      return {
+        ...project,
+        totalVisits,
+        todayVisits,
+        uniqueVisitors: visitors.length,
+      }
+    })
+  }, [projects, siteVisitorsMap])
+
+  // Calculate global stats from displayed projects (must be before conditional returns)
   const globalStats = useMemo(() => {
-    return projects.reduce(
+    return displayedProjects.reduce(
       (acc, project) => ({
         totalVisits: acc.totalVisits + (project.totalVisits || 0),
         todayVisits: acc.todayVisits + (project.todayVisits || 0),
@@ -25,7 +58,7 @@ export default function Dashboard() {
       }),
       { totalVisits: 0, todayVisits: 0, totalSites: 0 }
     )
-  }, [projects])
+  }, [displayedProjects])
 
   // Calculate global trend data for last 12 months (must be before conditional returns)
   const trendData = useMemo(() => {
@@ -105,12 +138,17 @@ export default function Dashboard() {
           },
         })
           .then(res => res.ok ? res.json() : null)
-          .then(data => data?.visitors || [])
-          .catch(() => [])
+          .then(data => ({ siteId: project.siteId, visitors: data?.visitors || [] }))
+          .catch(() => ({ siteId: project.siteId, visitors: [] }))
       )
 
       const allVisitorsData = await Promise.all(visitorsPromises)
-      setAllVisitors(allVisitorsData.flat())
+      const nextSiteVisitorsMap = allVisitorsData.reduce((acc, item) => {
+        acc[item.siteId] = item.visitors
+        return acc
+      }, {})
+      setSiteVisitorsMap(nextSiteVisitorsMap)
+      setAllVisitors(allVisitorsData.flatMap(item => item.visitors))
       setError('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load projects')
@@ -260,7 +298,7 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {projects.map((project) => (
+          {displayedProjects.map((project) => (
             <Link
               key={project.siteId}
               to={`/sites/${encodeURIComponent(project.siteId)}`}

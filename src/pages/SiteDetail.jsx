@@ -63,6 +63,7 @@ export default function SiteDetail() {
   const { siteId } = useParams()
   const [site, setSite] = useState(null)
   const [visitors, setVisitors] = useState([])
+  const [selectedDayIndex, setSelectedDayIndex] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -210,6 +211,7 @@ export default function SiteDetail() {
       visitsByDay,
       dayNames,
       maxDayVisits,
+      peakDayIndex,
       peakDay,
       visitsByHour,
       maxHourVisits,
@@ -222,6 +224,43 @@ export default function SiteDetail() {
       peakMonth,
     }
   }, [visitors])
+
+  useEffect(() => {
+    if (!stats) {
+      return
+    }
+
+    setSelectedDayIndex((prev) => (prev === null ? stats.peakDayIndex : prev))
+  }, [stats])
+
+  const hourlyStatsForSelectedDay = useMemo(() => {
+    const targetDay = selectedDayIndex ?? 0
+    const visitsByHour = Array(24).fill(0)
+
+    visitors.forEach((visitor) => {
+      ;(visitor.visits || []).forEach((visit) => {
+        const parsedDate = getVisitDate(visit, visitor)
+        if (!parsedDate) {
+          return
+        }
+
+        if (parsedDate.getDay() !== targetDay) {
+          return
+        }
+
+        visitsByHour[parsedDate.getHours()]++
+      })
+    })
+
+    const maxHourVisits = Math.max(...visitsByHour, 1)
+    const peakHourIndex = visitsByHour.indexOf(maxHourVisits)
+
+    return {
+      visitsByHour,
+      maxHourVisits,
+      peakHour: `${peakHourIndex}:00`,
+    }
+  }, [visitors, selectedDayIndex])
 
   if (loading) {
     return (
@@ -330,31 +369,44 @@ export default function SiteDetail() {
             <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-xs font-medium text-black/60 dark:text-white/60">Activity by Day</p>
-                <p className="text-xs text-black/40 dark:text-white/40">Peak: <span className="text-black dark:text-white font-medium">{stats.peakDay}</span></p>
+                <p className="text-xs text-black/40 dark:text-white/40">Selected: <span className="text-black dark:text-white font-medium">{stats.dayNames[selectedDayIndex ?? stats.peakDayIndex]}</span></p>
               </div>
-              <div className="flex items-end gap-2" style={{ height: '96px' }}>
+              <div className="flex items-end h-24 gap-[2px]">
                 {stats.visitsByDay.map((count, i) => {
-                  const heightPx = stats.maxDayVisits > 0 ? (count / stats.maxDayVisits) * 80 : 0
-                  const isPeak = i === stats.visitsByDay.indexOf(stats.maxDayVisits)
+                  const height = stats.maxDayVisits > 0 ? (count / stats.maxDayVisits) * 80 : 0
+                  const isSelected = i === (selectedDayIndex ?? stats.peakDayIndex)
                   return (
-                    <div key={i} className="flex-1 flex flex-col items-center justify-end group">
-                      <div className="relative w-full flex justify-center">
-                        <span className="absolute -top-5 text-[10px] font-medium text-black dark:text-white opacity-0 group-hover:opacity-100 transition-opacity tabular-nums">
-                          {count}
-                        </span>
-                      </div>
-                      <div 
-                        className={`w-full rounded-md transition-all duration-200 cursor-default ${
-                          isPeak 
-                            ? 'bg-black dark:bg-white' 
-                            : 'bg-black/20 dark:bg-white/20 group-hover:bg-black/40 dark:group-hover:bg-white/40'
+                    <div key={i} className="flex-1 h-full relative group z-0 hover:z-20">
+                      <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full z-30 text-[9px] font-medium text-black dark:text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tabular-nums pointer-events-none">
+                        {stats.dayNames[i]} ({count})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDayIndex(i)}
+                        aria-label={`Show hourly activity for ${stats.dayNames[i]}`}
+                        className={`absolute bottom-0 left-0 right-0 rounded-sm transition-all duration-200 cursor-pointer ${
+                          isSelected
+                            ? 'bg-black dark:bg-white'
+                            : 'bg-black/15 dark:bg-white/15 hover:bg-black/30 dark:hover:bg-white/30'
                         }`}
-                        style={{ height: `${Math.max(heightPx, count > 0 ? 6 : 2)}px` }}
+                        style={{ height: `${height}%`, minHeight: count > 0 ? '3px' : '1px' }}
                       />
-                      <span className={`text-[10px] mt-2 transition-colors ${
-                        isPeak ? 'text-black dark:text-white font-medium' : 'text-black/40 dark:text-white/40'
-                      }`}>{stats.dayNames[i]}</span>
                     </div>
+                  )
+                })}
+              </div>
+              <div className="flex text-[10px] mt-2">
+                {stats.dayNames.map((day, i) => {
+                  const isSelected = i === (selectedDayIndex ?? stats.peakDayIndex)
+                  return (
+                    <span
+                      key={day}
+                      className={`flex-1 text-center transition-colors ${
+                        isSelected ? 'text-black dark:text-white font-medium' : 'text-black/40 dark:text-white/40'
+                      }`}
+                    >
+                      {day}
+                    </span>
                   )
                 })}
               </div>
@@ -363,25 +415,25 @@ export default function SiteDetail() {
             <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-xs font-medium text-black/60 dark:text-white/60">Activity by Hour</p>
-                <p className="text-xs text-black/40 dark:text-white/40">Peak: <span className="text-black dark:text-white font-medium">{stats.peakHour}</span></p>
+                <p className="text-xs text-black/40 dark:text-white/40">Peak: <span className="text-black dark:text-white font-medium">{hourlyStatsForSelectedDay.peakHour}</span></p>
               </div>
               <div className="flex items-end h-24 gap-[2px]">
-                {stats.visitsByHour.map((count, i) => {
-                  const height = stats.maxHourVisits > 0 ? (count / stats.maxHourVisits) * 100 : 0
-                  const isPeak = i === stats.visitsByHour.indexOf(stats.maxHourVisits)
+                {hourlyStatsForSelectedDay.visitsByHour.map((count, i) => {
+                  const height = hourlyStatsForSelectedDay.maxHourVisits > 0 ? (count / hourlyStatsForSelectedDay.maxHourVisits) * 80 : 0
+                  const isPeak = i === hourlyStatsForSelectedDay.visitsByHour.indexOf(hourlyStatsForSelectedDay.maxHourVisits)
                   return (
-                    <div 
-                      key={i}
-                      className={`flex-1 rounded-sm transition-all duration-200 cursor-default group relative ${
-                        isPeak 
-                          ? 'bg-black dark:bg-white' 
-                          : 'bg-black/15 dark:bg-white/15 hover:bg-black/30 dark:hover:bg-white/30'
-                      }`}
-                      style={{ height: `${height}%`, minHeight: count > 0 ? '3px' : '1px' }}
-                    >
-                      <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-medium text-black dark:text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tabular-nums">
+                    <div key={i} className="flex-1 h-full relative group z-0 hover:z-20">
+                      <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full z-30 text-[9px] font-medium text-black dark:text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tabular-nums pointer-events-none">
                         {i}:00 ({count})
                       </span>
+                      <div 
+                        className={`absolute bottom-0 left-0 right-0 rounded-sm transition-all duration-200 cursor-default ${
+                          isPeak 
+                            ? 'bg-black dark:bg-white' 
+                            : 'bg-black/15 dark:bg-white/15 hover:bg-black/30 dark:hover:bg-white/30'
+                        }`}
+                        style={{ height: `${height}%`, minHeight: count > 0 ? '3px' : '1px' }}
+                      />
                     </div>
                   )
                 })}

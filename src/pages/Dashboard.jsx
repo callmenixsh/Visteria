@@ -182,7 +182,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-black dark:text-white">Dashboard</h1>
+      <div>
+        <h1 className="text-2xl font-semibold text-black dark:text-white">Dashboard</h1>
+        <p className="text-sm text-black/50 dark:text-white/50 mt-1">Tracking since 20 Feburary 2026</p>
+      </div>
 
       {projects.length > 0 && (
         <div className="grid grid-cols-3 gap-3">

@@ -1,11 +1,11 @@
 import crypto from 'node:crypto'
-import { getVisitsCollection, verifyApiKey } from '../_lib/db.js'
+import { getVisitsCollection } from '../_lib/db.js'
 
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end()
@@ -15,10 +15,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const auth = verifyApiKey(req)
-  if (!auth.valid) {
-    return res.status(auth.error === 'Unauthorized' ? 401 : 500).json({ error: auth.error })
-  }
+  // Track endpoint is public - no auth required
 
   try {
     const { siteId, siteName, siteUrl, url, referrer, userAgent, visitedAt } = req.body || {}

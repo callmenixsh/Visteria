@@ -117,7 +117,7 @@ export default function Layout({ children }) {
               </div>
               <div>
                 <p className="text-sm font-medium text-black dark:text-white">Visteria</p>
-                <p className="text-xs text-black/40 dark:text-white/40">Simple analytics for your projects</p>
+                <p className="text-xs text-black/40 dark:text-white/40">Simple analytics</p>
               </div>
             </div>
             

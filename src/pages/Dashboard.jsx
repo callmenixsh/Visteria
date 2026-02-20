@@ -294,14 +294,17 @@ export default function Dashboard() {
 
       {/* Global Trend Graph */}
       {projects.length > 0 && trendData && (
-        <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-5">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-sm font-medium text-black dark:text-white">Total Visits Trend</h2>
+              <div className="flex items-center justify-between gap-2 w-full">
+                <h2 className="text-sm font-medium text-black dark:text-white">Total Visits Trend</h2>
+                <p className="text-xs text-black/40 dark:text-white/40 whitespace-nowrap">Peak: <span className="text-black dark:text-white font-medium">{trendData.peakLabel}</span></p>
+              </div>
               <p className="text-xs text-black/40 dark:text-white/40 mt-0.5">{trendData.subtitle}</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="inline-flex items-center p-0.5 rounded-full bg-black/5 dark:bg-white/5">
+            <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+              <div className="inline-flex items-center p-0.5 rounded-full bg-black/5 dark:bg-white/5 overflow-x-auto max-w-[220px] sm:max-w-none">
                 {[
                   { key: 'year', label: 'Year' },
                   { key: 'month', label: 'Month' },
@@ -312,7 +315,7 @@ export default function Dashboard() {
                     key={mode.key}
                     type="button"
                     onClick={() => setTrendMode(mode.key)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 whitespace-nowrap ${
                       trendMode === mode.key
                         ? 'bg-black text-white dark:bg-white dark:text-black shadow-sm'
                         : 'text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white'
@@ -322,10 +325,9 @@ export default function Dashboard() {
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-black/40 dark:text-white/40">Peak: <span className="text-black dark:text-white font-medium">{trendData.peakLabel}</span></p>
             </div>
           </div>
-          <div className="relative h-52">
+          <div className="relative h-44 sm:h-52">
             <svg className="w-full h-full" viewBox="0 0 300 160" preserveAspectRatio="none">
               {/* Grid lines */}
               {[0, 40, 80, 120, 160].map((y) => (
@@ -375,15 +377,22 @@ export default function Dashboard() {
             <div className="absolute inset-0 flex">
               {trendData.points.map((d, i) => (
                 <div key={i} className="flex-1 relative group">
-                  <div className="absolute top-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                  <div className="hidden sm:block absolute top-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
                     {d.label}: {d.visits}
                   </div>
                 </div>
               ))}
             </div>
           </div>
-          <div className="flex justify-between text-[10px] text-black/40 dark:text-white/40 mt-3">
+          <div className="hidden sm:flex justify-between text-[10px] text-black/40 dark:text-white/40 mt-3">
             {trendData.tickIndexes.map((i) => (
+              <span key={i} className={trendData.peakIndex === i ? 'text-black dark:text-white font-medium' : ''}>
+                {trendData.points[i]?.shortLabel}
+              </span>
+            ))}
+          </div>
+          <div className="flex sm:hidden justify-between text-[10px] text-black/40 dark:text-white/40 mt-3">
+            {[0, Math.floor((trendData.points.length - 1) / 2), trendData.points.length - 1].map((i) => (
               <span key={i} className={trendData.peakIndex === i ? 'text-black dark:text-white font-medium' : ''}>
                 {trendData.points[i]?.shortLabel}
               </span>

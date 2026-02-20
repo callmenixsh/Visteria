@@ -64,6 +64,9 @@ export default function SiteDetail() {
   const [site, setSite] = useState(null)
   const [visitors, setVisitors] = useState([])
   const [selectedDayIndex, setSelectedDayIndex] = useState(null)
+  const [activeDayTooltipIndex, setActiveDayTooltipIndex] = useState(null)
+  const [activeHourTooltipIndex, setActiveHourTooltipIndex] = useState(null)
+  const [activeYearTooltipIndex, setActiveYearTooltipIndex] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -233,6 +236,10 @@ export default function SiteDetail() {
     setSelectedDayIndex((prev) => (prev === null ? stats.peakDayIndex : prev))
   }, [stats])
 
+  useEffect(() => {
+    setActiveHourTooltipIndex(null)
+  }, [selectedDayIndex])
+
   const hourlyStatsForSelectedDay = useMemo(() => {
     const targetDay = selectedDayIndex ?? 0
     const visitsByHour = Array(24).fill(0)
@@ -377,12 +384,15 @@ export default function SiteDetail() {
                   const isSelected = i === (selectedDayIndex ?? stats.peakDayIndex)
                   return (
                     <div key={i} className="flex-1 h-full relative group z-0 hover:z-20">
-                      <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full z-30 text-[9px] font-medium text-black dark:text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tabular-nums pointer-events-none">
+                      <span className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full z-30 text-[9px] font-medium text-black dark:text-white transition-opacity whitespace-nowrap tabular-nums pointer-events-none ${activeDayTooltipIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                         {stats.dayNames[i]} ({count})
                       </span>
                       <button
                         type="button"
-                        onClick={() => setSelectedDayIndex(i)}
+                        onClick={() => {
+                          setSelectedDayIndex(i)
+                          setActiveDayTooltipIndex((prev) => (prev === i ? null : i))
+                        }}
                         aria-label={`Show hourly activity for ${stats.dayNames[i]}`}
                         className={`absolute bottom-0 left-0 right-0 rounded-sm transition-all duration-200 cursor-pointer ${
                           isSelected
@@ -422,8 +432,14 @@ export default function SiteDetail() {
                   const height = hourlyStatsForSelectedDay.maxHourVisits > 0 ? (count / hourlyStatsForSelectedDay.maxHourVisits) * 80 : 0
                   const isPeak = i === hourlyStatsForSelectedDay.visitsByHour.indexOf(hourlyStatsForSelectedDay.maxHourVisits)
                   return (
-                    <div key={i} className="flex-1 h-full relative group z-0 hover:z-20">
-                      <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full z-30 text-[9px] font-medium text-black dark:text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap tabular-nums pointer-events-none">
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setActiveHourTooltipIndex((prev) => (prev === i ? null : i))}
+                      className="flex-1 h-full relative group z-0 hover:z-20"
+                      aria-label={`Show hourly visits for ${i}:00`}
+                    >
+                      <span className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full z-30 text-[9px] font-medium text-black dark:text-white transition-opacity whitespace-nowrap tabular-nums pointer-events-none ${activeHourTooltipIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                         {i}:00 ({count})
                       </span>
                       <div 
@@ -434,7 +450,7 @@ export default function SiteDetail() {
                         }`}
                         style={{ height: `${height}%`, minHeight: count > 0 ? '3px' : '1px' }}
                       />
-                    </div>
+                    </button>
                   )
                 })}
               </div>
@@ -503,11 +519,17 @@ export default function SiteDetail() {
               {/* Tooltip layer - rendered outside SVG for better positioning */}
               <div className="absolute inset-0 flex">
                 {stats.last12Months.map((d, i) => (
-                  <div key={i} className="flex-1 relative group">
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setActiveYearTooltipIndex((prev) => (prev === i ? null : i))}
+                    className="flex-1 relative group"
+                    aria-label={`Show monthly visits for ${d.label}`}
+                  >
+                    <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-medium rounded transition-opacity whitespace-nowrap pointer-events-none z-10 ${activeYearTooltipIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                       {d.label}: {d.visits}
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>

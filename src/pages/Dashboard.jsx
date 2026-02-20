@@ -22,6 +22,7 @@ export default function Dashboard() {
   const [allVisitors, setAllVisitors] = useState([])
   const [siteVisitorsMap, setSiteVisitorsMap] = useState({})
   const [trendMode, setTrendMode] = useState('year')
+  const [activeTrendPointIndex, setActiveTrendPointIndex] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -175,6 +176,10 @@ export default function Dashboard() {
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    setActiveTrendPointIndex(null)
+  }, [trendMode, trendData?.points?.length])
 
   async function loadData() {
     const apiKey = import.meta.env.VITE_TRACKING_API_KEY || ''
@@ -376,11 +381,17 @@ export default function Dashboard() {
             {/* Tooltip layer */}
             <div className="absolute inset-0 flex">
               {trendData.points.map((d, i) => (
-                <div key={i} className="flex-1 relative group">
-                  <div className="hidden sm:block absolute top-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setActiveTrendPointIndex((prev) => (prev === i ? null : i))}
+                  className="flex-1 relative group"
+                  aria-label={`Show visits for ${d.label}`}
+                >
+                  <div className={`absolute top-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-medium rounded transition-opacity whitespace-nowrap pointer-events-none z-10 ${activeTrendPointIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                     {d.label}: {d.visits}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>

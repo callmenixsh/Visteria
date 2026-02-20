@@ -174,6 +174,20 @@ export default function SiteDetail() {
     // Recent visitors (last 5)
     const recentVisitors = sortedByLast.slice(0, 5)
 
+    // Best day ever (calendar date with most visits)
+    const visitsByDate = {}
+    allVisits.forEach(v => {
+      const dateKey = v.date.toDateString()
+      visitsByDate[dateKey] = (visitsByDate[dateKey] || 0) + 1
+    })
+    const bestDayEntry = Object.entries(visitsByDate).reduce(
+      (best, [date, count]) => (count > best.count ? { date, count } : best),
+      { date: null, count: 0 }
+    )
+    const bestDay = bestDayEntry.date
+      ? { date: new Date(bestDayEntry.date), visits: bestDayEntry.count }
+      : null
+
     return {
       todayVisits: todayVisits.length,
       weekVisits: weekVisits.length,
@@ -191,6 +205,7 @@ export default function SiteDetail() {
       maxHourVisits,
       peakHour,
       recentVisitors,
+      bestDay,
       last12Months,
       maxYearlyVisits,
       peakMonthIndex,
@@ -483,6 +498,14 @@ export default function SiteDetail() {
                   <span className="text-sm text-black/50 dark:text-white/50">Last activity</span>
                   <span className="text-sm text-black dark:text-white font-medium">{formatRelativeTime(stats.lastActivity)}</span>
                 </div>
+                {stats.bestDay && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-black/50 dark:text-white/50">Best day</span>
+                    <span className="text-sm text-black dark:text-white font-medium">
+                      {formatDate(stats.bestDay.date)} <span className="text-black/40 dark:text-white/40">({stats.bestDay.visits})</span>
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

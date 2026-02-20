@@ -2,16 +2,17 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
+		<link rel="icon" type="image/png" href="/favicon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta
 			name="description"
 			content="Visteria visit tracking dashboard for your personal projects."
 		/>
-		<title>Visteria | Visit Tracking</title>
+		<title>Visteria</title>
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
-			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+			href="https://fonts.googleapis.com/css2?family=Caesar+Dressing&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
 			rel="stylesheet"
 		/>
 	</head>
@@ -19,21 +20,27 @@
 		<div id="root"></div>
 		<script type="module">
 			(function () {
-				const config = {
-					baseUrl: "https://visteria.vercel.app",
-					siteId: "Visteria",
-					siteUrl: "https://visteria.vercel.app",
-				};
-				const key = "visteria_" + config.siteId;
-				if (sessionStorage.getItem(key)) return;
-				sessionStorage.setItem(key, "1");
-				const endpoint = config.baseUrl + "/api/visits/track";
-				fetch(endpoint, {
+				const SITE_ID = "Visteria";
+				const SITE_URL = "https://visteria.vercel.app";
+				const COOLDOWN_MS = 2000;
+
+				const lastTracked = sessionStorage.getItem("visteria_last_" + SITE_ID);
+				const now = Date.now();
+
+				// Don't track if recently tracked (within cooldown)
+				if (lastTracked && now - parseInt(lastTracked) < COOLDOWN_MS) return;
+
+				// Don't track if page is hidden
+				if (document.hidden) return;
+
+				sessionStorage.setItem("visteria_last_" + SITE_ID, now.toString());
+
+				fetch("https://visteria.vercel.app/api/visits/track", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
-						siteId: config.siteId,
-						siteUrl: config.siteUrl,
+						siteId: SITE_ID,
+						siteUrl: SITE_URL,
 						url: location.href,
 						referrer: document.referrer,
 						userAgent: navigator.userAgent,

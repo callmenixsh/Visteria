@@ -386,34 +386,33 @@ export default function SiteDetail() {
                     y1={y}
                     x2="300"
                     y2={y}
-                    className="stroke-black/[0.06] dark:stroke-white/[0.06]"
+                    className="stroke-black/[0.04] dark:stroke-white/[0.04]"
                     strokeWidth="1"
-                    vectorEffect="non-scaling-stroke"
                   />
                 ))}
                 {/* Area fill */}
                 <path
                   d={`
-                    M 0 ${128 - (stats.last12Months[0].visits / stats.maxYearlyVisits) * 120}
+                    M 0,${128 - Math.max(0, (stats.last12Months[0].visits / stats.maxYearlyVisits) * 120)}
                     ${stats.last12Months.map((d, i) => {
                       const x = (i / 11) * 300
-                      const y = 128 - (d.visits / stats.maxYearlyVisits) * 120
-                      return `L ${x} ${y}`
+                      const y = 128 - Math.max(0, (d.visits / stats.maxYearlyVisits) * 120)
+                      return `L ${x},${y}`
                     }).join(' ')}
-                    L 300 128
-                    L 0 128
+                    L 300,128
+                    L 0,128
                     Z
                   `}
-                  className="fill-black/[0.06] dark:fill-white/[0.08]"
+                  className="fill-black/[0.06] dark:fill-white/[0.06]"
                 />
                 {/* Line */}
                 <path
                   d={`
-                    M 0 ${128 - (stats.last12Months[0].visits / stats.maxYearlyVisits) * 120}
+                    M 0,${128 - Math.max(0, (stats.last12Months[0].visits / stats.maxYearlyVisits) * 120)}
                     ${stats.last12Months.map((d, i) => {
                       const x = (i / 11) * 300
-                      const y = 128 - (d.visits / stats.maxYearlyVisits) * 120
-                      return `L ${x} ${y}`
+                      const y = 128 - Math.max(0, (d.visits / stats.maxYearlyVisits) * 120)
+                      return `L ${x},${y}`
                     }).join(' ')}
                   `}
                   fill="none"
@@ -421,35 +420,7 @@ export default function SiteDetail() {
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
                 />
-                {/* Data points */}
-                {stats.last12Months.map((d, i) => {
-                  const x = (i / 11) * 300
-                  const y = 128 - (d.visits / stats.maxYearlyVisits) * 120
-                  const isPeak = i === stats.peakMonthIndex
-                  return (
-                    <g key={i} className="group">
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r="10"
-                        className="fill-transparent cursor-default"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r={isPeak ? 5 : 4}
-                        className={isPeak 
-                          ? "fill-black dark:fill-white" 
-                          : "fill-black dark:fill-white opacity-0 group-hover:opacity-100 transition-opacity"
-                        }
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    </g>
-                  )
-                })}
               </svg>
               {/* Tooltip layer - rendered outside SVG for better positioning */}
               <div className="absolute inset-0 flex">

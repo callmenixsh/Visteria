@@ -9,15 +9,27 @@ function buildTrackingSnippet(siteId, siteUrl) {
 
   return `<script type="module">
 (function() {
-  const key = 'visteria_${safeSiteId}';
-  if (sessionStorage.getItem(key)) return;
-  sessionStorage.setItem(key, '1');
+  const SITE_ID = '${safeSiteId}';
+  const SITE_URL = '${safeSiteUrl}';
+  const COOLDOWN_MS = 2000;
+  
+  const lastTracked = sessionStorage.getItem('visteria_last_' + SITE_ID);
+  const now = Date.now();
+  
+  // Don't track if recently tracked (within cooldown)
+  if (lastTracked && now - parseInt(lastTracked) < COOLDOWN_MS) return;
+  
+  // Don't track if page is hidden
+  if (document.hidden) return;
+  
+  sessionStorage.setItem('visteria_last_' + SITE_ID, now.toString());
+  
   fetch('${API_BASE_URL}/api/visits/track', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      siteId: '${safeSiteId}',
-      siteUrl: '${safeSiteUrl}',
+      siteId: SITE_ID,
+      siteUrl: SITE_URL,
       url: location.href,
       referrer: document.referrer,
       userAgent: navigator.userAgent,
@@ -47,7 +59,10 @@ VITE_TRACKING_API_KEY=your-api-key`
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-semibold text-black dark:text-white">Settings</h1>
+      <div>
+        <h1 className="text-2xl font-semibold text-black dark:text-white">Setup Guide</h1>
+        <p className="text-sm text-black/50 dark:text-white/50 mt-1">Generate tracking snippets for your websites</p>
+      </div>
 
       {/* Tracking Snippet */}
       <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-5">

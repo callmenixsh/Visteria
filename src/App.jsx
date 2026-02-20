@@ -14,7 +14,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/sites/:siteId" element={<SiteDetail />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/setup" element={<Settings />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>

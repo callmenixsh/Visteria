@@ -1,98 +1,131 @@
 # Visteria
 
-A React dashboard for tracking visits across your own websites.
+A simple, privacy-focused analytics dashboard for tracking visits across your websites.
 
-## Deploy to Vercel (Recommended)
+## Features
 
-1. Push your code to GitHub
-2. Import the repo in [Vercel](https://vercel.com/new)
-3. Add environment variables in Vercel dashboard:
-   - `VISTERIA_API_KEY` - your secret API key
+- 📊 Real-time visitor tracking across multiple sites
+- 🌙 Dark/light theme support
+- 📈 Beautiful charts showing visits by day, hour, and trends over time
+- 🔒 Privacy-first: minimal tracking, no cookies, session-based deduplication
+- ⚡ Optimized tracking snippet with cooldown and visibility checks
+- 🚀 Serverless deployment on Vercel with MongoDB Atlas
+
+## Deploy to Vercel
+
+1. **Fork/Clone this repo**
+2. **Create MongoDB Atlas database** (free tier works great)
+3. **Import to [Vercel](https://vercel.com/new)**
+4. **Add environment variables** in Vercel dashboard:
+   - `VISTERIA_API_KEY` - Your secret API key for dashboard access
+   - `VITE_TRACKING_API_KEY` - Same as above (for frontend)
    - `MONGODB_URI` - MongoDB Atlas connection string
-   - `MONGODB_DB_NAME` - database name (default: visteria)
-4. Deploy!
+   - `MONGODB_DB_NAME` - Database name (default: `visteria`)
+   - `MONGODB_VISITS_COLLECTION` - Collection name (default: `visits`)
+5. **Deploy!** 🎉
 
-Your app will be available at `https://your-app.vercel.app`
-
-## Local development
+## Local Development
 
 ```bash
+# Install dependencies
 npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env and add your MongoDB URI and API key
+
+# Start dev server
 npm run dev
 ```
 
-## Backend (local)
+Visit `http://localhost:5173` to see your dashboard.
 
-1. Create a local env file:
+## Adding Tracking to Your Sites
 
-```bash
-# macOS/Linux
-cp .env.example .env
+1. Go to **Settings** in your Visteria dashboard
+2. Enter your **Site ID** (e.g., `my-portfolio`) and **Site URL**
+3. Copy the generated tracking snippet
+4. Paste it in the `<head>` of your website
+5. Deploy and watch your visits roll in! 📈
 
-# Windows (PowerShell)
-Copy-Item .env.example .env
+### Example Tracking Snippet
+
+```html
+<script>
+(function() {
+  const SITE_ID = 'your-site-id';
+  const SITE_URL = 'https://yoursite.com';
+  const API_URL = 'https://visteria.vercel.app/api/visits/track';
+  const COOLDOWN_MS = 2000;
+
+  const lastTracked = sessionStorage.getItem('visteria_last_' + SITE_ID);
+  const now = Date.now();
+  if (lastTracked && now - parseInt(lastTracked) < COOLDOWN_MS) return;
+  if (document.hidden) return;
+
+  sessionStorage.setItem('visteria_last_' + SITE_ID, now.toString());
+
+  navigator.sendBeacon(API_URL, JSON.stringify({
+    siteId: SITE_ID,
+    siteUrl: SITE_URL,
+    url: window.location.href,
+    referrer: document.referrer || '',
+    userAgent: navigator.userAgent,
+    visitedAt: new Date().toISOString()
+  }));
+})();
+</script>
 ```
 
-2. Set at least `VISTERIA_API_KEY` in `.env`.
-3. Set `MONGODB_URI` to your MongoDB Atlas/cluster connection string.
+## API Endpoints
 
-4. Start the API:
+### Public Endpoint (No Auth Required)
 
-```bash
-npm run api
+**Track Visit**
 ```
+POST /api/visits/track
+Content-Type: application/json
 
-The backend runs on `http://localhost:8787` by default and stores data in your MongoDB cluster.
-
-## What is implemented now
-
-- API config form (base URL + API key), saved in browser localStorage.
-- Project stats table (loads from your API, falls back to starter data).
-- Tracking script generator you can paste into each of your sites.
-
-## Expected API shape
-
-### Track a visit
-
-- Endpoint: `POST /api/visits/track`
-- Header: `x-api-key: <your-api-key>`
-- Body:
-
-```json
 {
-	"siteId": "portfolio-main",
-	"url": "https://example.com/",
-	"referrer": "https://google.com/",
-	"userAgent": "Mozilla/5.0 ...",
-	"visitedAt": "2026-02-20T08:00:00.000Z"
+  "siteId": "my-site",
+  "siteUrl": "https://mysite.com",
+  "url": "https://mysite.com/page",
+  "referrer": "https://google.com/",
+  "userAgent": "Mozilla/5.0...",
+  "visitedAt": "2026-02-21T10:00:00.000Z"
 }
 ```
 
-### Dashboard project list
+### Protected Endpoints (API Key Required)
 
-- Endpoint: `GET /api/projects`
-- Header: `x-api-key: <your-api-key>`
-- Response:
-
-```json
-{
-	"projects": [
-		{
-			"siteId": "portfolio-main",
-			"siteName": "Portfolio",
-			"todayVisits": 12,
-			"totalVisits": 420,
-			"uniqueVisitors": 280
-		}
-	]
-}
+**Get Site Details**
+```
+GET /api/sites/:siteId
+Header: x-api-key: your-api-key
 ```
 
-## Frontend config to use local backend
+## Tech Stack
 
-Set these in your frontend env (`.env` or `.env.local`):
+- **Frontend:** React 19 + Vite
+- **Styling:** Tailwind CSS
+- **Icons:** Lucide React
+- **Backend:** Vercel Serverless Functions
+- **Database:** MongoDB Atlas
+- **Deployment:** Vercel
 
-```bash
-VITE_TRACKING_API_BASE_URL=http://localhost:8787
-VITE_TRACKING_API_KEY=<same-as-VISTERIA_API_KEY>
-```
+## Privacy & Performance
+
+Visteria is designed with privacy and performance in mind:
+- No cookies or persistent tracking
+- Session-based deduplication (2-second cooldown)
+- Skips tracking when tab is hidden
+- Uses `sendBeacon` for reliable, non-blocking requests
+- Minimal data collection (URL, referrer, user agent, timestamp)
+
+## License
+
+MIT
+
+---
+
+Made with ❤️ by [@callmenixsh](https://github.com/callmenixsh)

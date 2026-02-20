@@ -71,6 +71,11 @@ export function trackVisit(configOverride = {}) {
       return
     }
 
+    // Skip tracking if page is hidden (background tab)
+    if (document.hidden) {
+      return
+    }
+
     const { baseUrl, siteId } = getTrackingConfig(configOverride)
     if (!baseUrl || !siteId) {
       return

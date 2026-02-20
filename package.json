@@ -5,8 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host --port 5173",
-    "api": "node backend/server.js",
-    "api:dev": "node --watch backend/server.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

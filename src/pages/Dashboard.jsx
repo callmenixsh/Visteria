@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, TrendingUp, Users, Globe } from 'lucide-react'
 
@@ -6,14 +6,62 @@ const API_BASE_URL = 'https://visteria.vercel.app'
 
 export default function Dashboard() {
   const [projects, setProjects] = useState([])
+  const [allVisitors, setAllVisitors] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Calculate global stats (must be before conditional returns)
+  const globalStats = useMemo(() => {
+    return projects.reduce(
+      (acc, project) => ({
+        totalVisits: acc.totalVisits + (project.totalVisits || 0),
+        todayVisits: acc.todayVisits + (project.todayVisits || 0),
+        totalSites: acc.totalSites + 1,
+      }),
+      { totalVisits: 0, todayVisits: 0, totalSites: 0 }
+    )
+  }, [projects])
+
+  // Calculate global trend data for last 12 months (must be before conditional returns)
+  const trendData = useMemo(() => {
+    if (!allVisitors.length) return null
+
+    const now = new Date()
+    const last12Months = []
+    
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
+      
+      let monthVisits = 0
+      allVisitors.forEach(visitor => {
+        (visitor.visits || []).forEach(visit => {
+          const visitDate = new Date(visit.visitedAt)
+          if (visitDate >= date && visitDate < nextDate) {
+            monthVisits++
+          }
+        })
+      })
+      
+      last12Months.push({
+        date,
+        label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        shortLabel: date.toLocaleDateString('en-US', { month: 'short' }),
+        visits: monthVisits,
+      })
+    }
+    
+    const maxVisits = Math.max(...last12Months.map(d => d.visits), 1)
+    const peakMonthIndex = last12Months.findIndex(d => d.visits === maxVisits)
+    
+    return { last12Months, maxVisits, peakMonthIndex }
+  }, [allVisitors])
+
   useEffect(() => {
-    loadProjects()
+    loadData()
   }, [])
 
-  async function loadProjects() {
+  async function loadData() {
     const apiKey = import.meta.env.VITE_TRACKING_API_KEY || ''
 
     if (!apiKey) {
@@ -23,7 +71,8 @@ export default function Dashboard() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/projects`, {
+      // Fetch projects list
+      const projectsResponse = await fetch(`${API_BASE_URL}/api/projects`, {
         method: 'GET',
         mode: 'cors',
         headers: {
@@ -32,13 +81,31 @@ export default function Dashboard() {
         },
       })
 
-      if (!response.ok) {
-        const text = await response.text().catch(() => '')
-        throw new Error(text || `Request failed (${response.status})`)
+      if (!projectsResponse.ok) {
+        const text = await projectsResponse.text().catch(() => '')
+        throw new Error(text || `Request failed (${projectsResponse.status})`)
       }
 
-      const data = await response.json()
-      setProjects(data.projects || [])
+      const projectsData = await projectsResponse.json()
+      const projectsList = projectsData.projects || []
+      setProjects(projectsList)
+
+      // Fetch detailed data for each site to build global graph
+      const visitorsPromises = projectsList.map(project =>
+        fetch(`${API_BASE_URL}/api/sites/${encodeURIComponent(project.siteId)}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+          },
+        })
+          .then(res => res.ok ? res.json() : null)
+          .then(data => data?.visitors || [])
+          .catch(() => [])
+      )
+
+      const allVisitorsData = await Promise.all(visitorsPromises)
+      setAllVisitors(allVisitorsData.flat())
       setError('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load projects')
@@ -63,23 +130,14 @@ export default function Dashboard() {
         </div>
         <p className="text-black/70 dark:text-white/70 mb-3">{error}</p>
         <Link 
-          to="/settings" 
+          to="/setup" 
           className="text-sm font-medium text-black dark:text-white hover:underline"
         >
-          Go to Settings →
+          Go to Setup →
         </Link>
       </div>
     )
   }
-
-  const globalStats = projects.reduce(
-    (acc, project) => ({
-      totalVisits: acc.totalVisits + (project.totalVisits || 0),
-      todayVisits: acc.todayVisits + (project.todayVisits || 0),
-      totalSites: acc.totalSites + 1,
-    }),
-    { totalVisits: 0, todayVisits: 0, totalSites: 0 }
-  )
 
   return (
     <div className="space-y-6">
@@ -107,6 +165,83 @@ export default function Dashboard() {
               <span className="text-xs font-medium text-black/50 dark:text-white/50">Total</span>
             </div>
             <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{globalStats.totalVisits}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Global Trend Graph */}
+      {projects.length > 0 && trendData && (
+        <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-medium text-black dark:text-white">Total Visits Trend</h2>
+              <p className="text-xs text-black/40 dark:text-white/40 mt-0.5">Last 12 months across all sites</p>
+            </div>
+            <p className="text-xs text-black/40 dark:text-white/40">Peak: <span className="text-black dark:text-white font-medium">{trendData.last12Months[trendData.peakMonthIndex]?.shortLabel}</span></p>
+          </div>
+          <div className="relative h-40">
+            <svg className="w-full h-full" viewBox="0 0 300 160" preserveAspectRatio="none">
+              {/* Grid lines */}
+              {[0, 40, 80, 120, 160].map((y) => (
+                <line
+                  key={y}
+                  x1="0"
+                  y1={y}
+                  x2="300"
+                  y2={y}
+                  className="stroke-black/[0.04] dark:stroke-white/[0.04]"
+                  strokeWidth="1"
+                />
+              ))}
+              {/* Area fill */}
+              <path
+                d={`
+                  M 0,${160 - Math.max(0, (trendData.last12Months[0].visits / trendData.maxVisits) * 150)}
+                  ${trendData.last12Months.map((d, i) => {
+                    const x = (i / 11) * 300
+                    const y = 160 - Math.max(0, (d.visits / trendData.maxVisits) * 150)
+                    return `L ${x},${y}`
+                  }).join(' ')}
+                  L 300,160
+                  L 0,160
+                  Z
+                `}
+                className="fill-black/[0.06] dark:fill-white/[0.06]"
+              />
+              {/* Line */}
+              <path
+                d={`
+                  M 0,${160 - Math.max(0, (trendData.last12Months[0].visits / trendData.maxVisits) * 150)}
+                  ${trendData.last12Months.map((d, i) => {
+                    const x = (i / 11) * 300
+                    const y = 160 - Math.max(0, (d.visits / trendData.maxVisits) * 150)
+                    return `L ${x},${y}`
+                  }).join(' ')}
+                `}
+                fill="none"
+                className="stroke-black dark:stroke-white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {/* Tooltip layer */}
+            <div className="absolute inset-0 flex">
+              {trendData.last12Months.map((d, i) => (
+                <div key={i} className="flex-1 relative group">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                    {d.label}: {d.visits}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-between text-[10px] text-black/40 dark:text-white/40 mt-3">
+            {[0, 2, 4, 6, 8, 10].map((i) => (
+              <span key={i} className={trendData.peakMonthIndex === i ? 'text-black dark:text-white font-medium' : ''}>
+                {trendData.last12Months[i].shortLabel}
+              </span>
+            ))}
           </div>
         </div>
       )}

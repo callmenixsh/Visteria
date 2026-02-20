@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Visteria visit tracking dashboard for your personal projects." />
+    <title>Visteria | Visit Tracking</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Visteria tracking -->
+    <script type="module">
+      window.__VISTERIA_TRACKING_CONFIG__ = {
+        apiBaseUrl: import.meta.env.VITE_TRACKING_API_BASE_URL || 'http://localhost:8787',
+        apiKey: import.meta.env.VITE_TRACKING_API_KEY || '',
+        siteId: import.meta.env.VITE_TRACKING_SITE_ID || '',
+      };
+
+      (function trackVisit() {
+        const config = window.__VISTERIA_TRACKING_CONFIG__ || {};
+        const baseUrl = (config.apiBaseUrl || '').replace(/\/+$/, '');
+        const apiKey = config.apiKey || '';
+        const siteId = config.siteId || window.location.hostname;
+
+        if (!baseUrl || !siteId) return;
+
+        const endpoint = baseUrl.toLowerCase().endsWith('/api')
+          ? baseUrl + '/visits/track'
+          : baseUrl + '/api/visits/track';
+
+        const payload = {
+          siteId: siteId,
+          url: window.location.href,
+          referrer: document.referrer,
+          userAgent: navigator.userAgent,
+          visitedAt: new Date().toISOString(),
+        };
+
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['x-api-key'] = apiKey;
+
+        fetch(endpoint, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(payload),
+          keepalive: true,
+        }).catch(function () {});
+      })();
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

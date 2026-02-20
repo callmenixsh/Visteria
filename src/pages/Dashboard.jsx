@@ -24,12 +24,10 @@ export default function Dashboard() {
         return project
       }
 
-      let totalVisits = 0
       let todayVisits = 0
 
       visitors.forEach((visitor) => {
         const visits = visitor.visits || []
-        totalVisits += visits.length
 
         visits.forEach((visit) => {
           const visitDate = new Date(visit.visitedAt)
@@ -41,9 +39,9 @@ export default function Dashboard() {
 
       return {
         ...project,
-        totalVisits,
+        totalVisits: project.totalVisits || 0,
         todayVisits,
-        uniqueVisitors: visitors.length,
+        uniqueVisitors: project.uniqueVisitors || 0,
       }
     })
   }, [projects, siteVisitorsMap])

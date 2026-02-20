@@ -53,7 +53,7 @@ export default async function handler(req, res) {
         firstSeenAt: v.firstSeenAt,
         lastSeenAt: v.lastSeenAt,
         visitCount: v.visits?.length || 0,
-        visits: (v.visits || []).slice(-50).reverse(),
+        visits: (v.visits || []).slice().reverse(),
       })),
     })
   } catch (error) {

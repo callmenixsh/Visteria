@@ -42,6 +42,23 @@ function formatRelativeTime(dateStr) {
   return formatDate(dateStr)
 }
 
+function getVisitDate(visit, visitor) {
+  const candidate =
+    visit?.visitedAt ||
+    visit?.timestamp ||
+    visit?.date ||
+    visitor?.lastSeenAt ||
+    visitor?.firstSeenAt ||
+    null
+
+  if (!candidate) {
+    return null
+  }
+
+  const parsed = new Date(candidate)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 export default function SiteDetail() {
   const { siteId } = useParams()
   const [site, setSite] = useState(null)
@@ -91,12 +108,21 @@ export default function SiteDetail() {
   const stats = useMemo(() => {
     if (!visitors.length) return null
 
-    const allVisits = visitors.flatMap(v => 
-      (v.visits || []).map(visit => ({
-        ...visit,
-        visitorHash: v.visitorHash,
-        date: new Date(visit.visitedAt)
-      }))
+    const allVisits = visitors.flatMap(v =>
+      (v.visits || [])
+        .map((visit) => {
+          const parsedDate = getVisitDate(visit, v)
+          if (!parsedDate) {
+            return null
+          }
+
+          return {
+            ...visit,
+            visitorHash: v.visitorHash,
+            date: parsedDate,
+          }
+        })
+        .filter(Boolean)
     )
 
     const todayVisits = allVisits.filter(v => isToday(v.date))

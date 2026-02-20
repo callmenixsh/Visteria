@@ -22,8 +22,10 @@ export default async function handler(req, res) {
   try {
     const visitsCollection = await getVisitsCollection()
 
-    const startOfTodayUtc = new Date()
-    startOfTodayUtc.setUTCHours(0, 0, 0, 0)
+    // Get today's date in local timezone (not UTC)
+    const today = new Date()
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
 
     const rows = await visitsCollection
       .aggregate([
@@ -35,7 +37,12 @@ export default async function handler(req, res) {
                 $filter: {
                   input: { $ifNull: ['$visits', []] },
                   as: 'visit',
-                  cond: { $gte: ['$$visit.visitedAt', startOfTodayUtc] },
+                  cond: { 
+                    $and: [
+                      { $gte: ['$$visit.visitedAt', startOfToday] },
+                      { $lt: ['$$visit.visitedAt', endOfToday] }
+                    ]
+                  },
                 },
               },
             },

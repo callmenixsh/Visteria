@@ -4,13 +4,18 @@ import { ChevronRight, TrendingUp, Users, Globe } from 'lucide-react'
 
 const API_BASE_URL = 'https://visteria.vercel.app'
 
+function isToday(date) {
+  const today = new Date()
+  return date.toDateString() === today.toDateString()
+}
+
 export default function Dashboard() {
   const [projects, setProjects] = useState([])
   const [allVisitors, setAllVisitors] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // Calculate global stats (must be before conditional returns)
+  // Calculate global stats from projects (must be before conditional returns)
   const globalStats = useMemo(() => {
     return projects.reduce(
       (acc, project) => ({

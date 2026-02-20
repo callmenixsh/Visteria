@@ -9,10 +9,19 @@ function isToday(date) {
   return date.toDateString() === today.toDateString()
 }
 
+function getVisitDate(visit) {
+  const candidate = visit?.visitedAt || visit?.timestamp || visit?.date || null
+  if (!candidate) return null
+
+  const parsed = new Date(candidate)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 export default function Dashboard() {
   const [projects, setProjects] = useState([])
   const [allVisitors, setAllVisitors] = useState([])
   const [siteVisitorsMap, setSiteVisitorsMap] = useState({})
+  const [trendMode, setTrendMode] = useState('year')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -58,40 +67,110 @@ export default function Dashboard() {
     )
   }, [displayedProjects])
 
-  // Calculate global trend data for last 12 months (must be before conditional returns)
+  const allVisitDates = useMemo(() => {
+    const dates = []
+
+    allVisitors.forEach((visitor) => {
+      ;(visitor.visits || []).forEach((visit) => {
+        const parsedDate = getVisitDate(visit)
+        if (parsedDate) {
+          dates.push(parsedDate)
+        }
+      })
+    })
+
+    return dates
+  }, [allVisitors])
+
+  // Calculate global trend data based on selected mode (must be before conditional returns)
   const trendData = useMemo(() => {
-    if (!allVisitors.length) return null
+    if (!allVisitDates.length) return null
 
     const now = new Date()
-    const last12Months = []
-    
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
-      
-      let monthVisits = 0
-      allVisitors.forEach(visitor => {
-        (visitor.visits || []).forEach(visit => {
-          const visitDate = new Date(visit.visitedAt)
-          if (visitDate >= date && visitDate < nextDate) {
-            monthVisits++
-          }
+    const points = []
+
+    if (trendMode === 'year') {
+      for (let i = 11; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
+        const visits = allVisitDates.filter((visitDate) => visitDate >= date && visitDate < nextDate).length
+
+        points.push({
+          label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          shortLabel: date.toLocaleDateString('en-US', { month: 'short' }),
+          visits,
         })
-      })
-      
-      last12Months.push({
-        date,
-        label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        shortLabel: date.toLocaleDateString('en-US', { month: 'short' }),
-        visits: monthVisits,
-      })
+      }
     }
-    
-    const maxVisits = Math.max(...last12Months.map(d => d.visits), 1)
-    const peakMonthIndex = last12Months.findIndex(d => d.visits === maxVisits)
-    
-    return { last12Months, maxVisits, peakMonthIndex }
-  }, [allVisitors])
+
+    if (trendMode === 'month') {
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+        const nextDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1)
+        const visits = allVisitDates.filter((visitDate) => visitDate >= date && visitDate < nextDate).length
+
+        points.push({
+          label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          shortLabel: String(date.getDate()),
+          visits,
+        })
+      }
+    }
+
+    if (trendMode === 'week') {
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+        const nextDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1)
+        const visits = allVisitDates.filter((visitDate) => visitDate >= date && visitDate < nextDate).length
+
+        points.push({
+          label: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+          shortLabel: date.toLocaleDateString('en-US', { weekday: 'short' }),
+          visits,
+        })
+      }
+    }
+
+    if (trendMode === 'day') {
+      for (let i = 23; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() - i, 0, 0, 0)
+        const nextDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() - i + 1, 0, 0, 0)
+        const visits = allVisitDates.filter((visitDate) => visitDate >= date && visitDate < nextDate).length
+
+        points.push({
+          label: date.toLocaleTimeString('en-US', { hour: 'numeric' }),
+          shortLabel: date.toLocaleTimeString('en-US', { hour: 'numeric' }),
+          visits,
+        })
+      }
+    }
+
+    const maxVisits = Math.max(...points.map((point) => point.visits), 1)
+    const peakIndex = points.findIndex((point) => point.visits === maxVisits)
+
+    const tickIndexesByMode = {
+      year: [0, 2, 4, 6, 8, 10],
+      month: [0, 5, 10, 15, 20, 25, 29],
+      week: [0, 1, 2, 3, 4, 5, 6],
+      day: [0, 4, 8, 12, 16, 20, 23],
+    }
+
+    const subtitleByMode = {
+      year: 'Last 12 months across all sites',
+      month: 'Last 30 days across all sites',
+      week: 'Last 7 days across all sites',
+      day: 'Last 24 hours across all sites',
+    }
+
+    return {
+      points,
+      maxVisits,
+      peakIndex,
+      peakLabel: points[peakIndex]?.shortLabel || '-',
+      tickIndexes: tickIndexesByMode[trendMode],
+      subtitle: subtitleByMode[trendMode],
+    }
+  }, [allVisitDates, trendMode])
 
   useEffect(() => {
     loadData()
@@ -219,11 +298,34 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-medium text-black dark:text-white">Total Visits Trend</h2>
-              <p className="text-xs text-black/40 dark:text-white/40 mt-0.5">Last 12 months across all sites</p>
+              <p className="text-xs text-black/40 dark:text-white/40 mt-0.5">{trendData.subtitle}</p>
             </div>
-            <p className="text-xs text-black/40 dark:text-white/40">Peak: <span className="text-black dark:text-white font-medium">{trendData.last12Months[trendData.peakMonthIndex]?.shortLabel}</span></p>
+            <div className="flex items-center gap-3">
+              <div className="inline-flex items-center p-0.5 rounded-full bg-black/5 dark:bg-white/5">
+                {[
+                  { key: 'year', label: 'Year' },
+                  { key: 'month', label: 'Month' },
+                  { key: 'week', label: 'Week' },
+                  { key: 'day', label: 'Day' },
+                ].map((mode) => (
+                  <button
+                    key={mode.key}
+                    type="button"
+                    onClick={() => setTrendMode(mode.key)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
+                      trendMode === mode.key
+                        ? 'bg-black text-white dark:bg-white dark:text-black shadow-sm'
+                        : 'text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white'
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-black/40 dark:text-white/40">Peak: <span className="text-black dark:text-white font-medium">{trendData.peakLabel}</span></p>
+            </div>
           </div>
-          <div className="relative h-40">
+          <div className="relative h-52">
             <svg className="w-full h-full" viewBox="0 0 300 160" preserveAspectRatio="none">
               {/* Grid lines */}
               {[0, 40, 80, 120, 160].map((y) => (
@@ -240,9 +342,9 @@ export default function Dashboard() {
               {/* Area fill */}
               <path
                 d={`
-                  M 0,${160 - Math.max(0, (trendData.last12Months[0].visits / trendData.maxVisits) * 150)}
-                  ${trendData.last12Months.map((d, i) => {
-                    const x = (i / 11) * 300
+                  M 0,${160 - Math.max(0, (trendData.points[0].visits / trendData.maxVisits) * 150)}
+                  ${trendData.points.map((d, i) => {
+                    const x = (i / Math.max(trendData.points.length - 1, 1)) * 300
                     const y = 160 - Math.max(0, (d.visits / trendData.maxVisits) * 150)
                     return `L ${x},${y}`
                   }).join(' ')}
@@ -255,9 +357,9 @@ export default function Dashboard() {
               {/* Line */}
               <path
                 d={`
-                  M 0,${160 - Math.max(0, (trendData.last12Months[0].visits / trendData.maxVisits) * 150)}
-                  ${trendData.last12Months.map((d, i) => {
-                    const x = (i / 11) * 300
+                  M 0,${160 - Math.max(0, (trendData.points[0].visits / trendData.maxVisits) * 150)}
+                  ${trendData.points.map((d, i) => {
+                    const x = (i / Math.max(trendData.points.length - 1, 1)) * 300
                     const y = 160 - Math.max(0, (d.visits / trendData.maxVisits) * 150)
                     return `L ${x},${y}`
                   }).join(' ')}
@@ -271,9 +373,9 @@ export default function Dashboard() {
             </svg>
             {/* Tooltip layer */}
             <div className="absolute inset-0 flex">
-              {trendData.last12Months.map((d, i) => (
+              {trendData.points.map((d, i) => (
                 <div key={i} className="flex-1 relative group">
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                  <div className="absolute top-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
                     {d.label}: {d.visits}
                   </div>
                 </div>
@@ -281,9 +383,9 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex justify-between text-[10px] text-black/40 dark:text-white/40 mt-3">
-            {[0, 2, 4, 6, 8, 10].map((i) => (
-              <span key={i} className={trendData.peakMonthIndex === i ? 'text-black dark:text-white font-medium' : ''}>
-                {trendData.last12Months[i].shortLabel}
+            {trendData.tickIndexes.map((i) => (
+              <span key={i} className={trendData.peakIndex === i ? 'text-black dark:text-white font-medium' : ''}>
+                {trendData.points[i]?.shortLabel}
               </span>
             ))}
           </div>

@@ -4,6 +4,6 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/((?!api|assets|favicon\\.png|.*\\.[a-zA-Z0-9]+$).*)", "destination": "/" }
   ]
 }

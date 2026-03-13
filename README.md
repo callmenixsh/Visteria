@@ -19,6 +19,9 @@ A simple, privacy-focused analytics dashboard for tracking visits across your we
 4. **Add environment variables** in Vercel dashboard:
    - `VISTERIA_API_KEY` - Your secret API key for dashboard access
    - `VITE_TRACKING_API_KEY` - Same as above (for frontend)
+  - `VISTERIA_TRACKING_ALLOWED_HOSTS` - Comma-separated host allowlist for tracking (e.g. `mysite.com,www.mysite.com`)
+  - `VISTERIA_TRACKING_SITE_HOSTS_JSON` - Optional strict per-site host mapping (e.g. `{"portfolio":["nixsh.dev","www.nixsh.dev"]}`)
+  - `VISTERIA_TRACKING_ALLOWED_SITE_IDS` - Optional comma-separated site IDs allowed to send tracking events
    - `MONGODB_URI` - MongoDB Atlas connection string
    - `MONGODB_DB_NAME` - Database name (default: `visteria`)
    - `MONGODB_VISITS_COLLECTION` - Collection name (default: `visits`)
@@ -95,6 +98,11 @@ Content-Type: application/json
   "visitedAt": "2026-02-21T10:00:00.000Z"
 }
 ```
+
+Tracking hardening:
+- If no allowlist env vars are set, tracking stays open (backward compatible).
+- If any allowlist var is set, `/api/visits/track` only accepts events matching configured `siteId` and host rules.
+- Recommended: use `VISTERIA_TRACKING_SITE_HOSTS_JSON` to lock each `siteId` to explicit domains.
 
 ### Protected Endpoints (API Key Required)
 

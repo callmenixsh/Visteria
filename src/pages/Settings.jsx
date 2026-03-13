@@ -70,7 +70,12 @@ export default function Settings() {
   const trackingSnippet = useMemo(() => buildTrackingSnippet(siteId, siteUrl), [siteId, siteUrl])
   
   const envExample = `# Visteria Dashboard
-VITE_TRACKING_API_KEY=your-api-key`
+VITE_TRACKING_API_KEY=your-api-key
+
+# Tracking allowlist (recommended)
+VISTERIA_TRACKING_ALLOWED_HOSTS=mysite.com,www.mysite.com
+VISTERIA_TRACKING_SITE_HOSTS_JSON={"my-portfolio":["mysite.com","www.mysite.com"]}
+VISTERIA_TRACKING_ALLOWED_SITE_IDS=my-portfolio`
 
   function copyToClipboard(text, type) {
     navigator.clipboard.writeText(text)

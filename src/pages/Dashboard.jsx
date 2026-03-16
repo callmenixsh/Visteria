@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, TrendingUp, Users, Globe } from 'lucide-react'
+import { ChevronRight, TrendingUp, Users, Globe, Eye } from 'lucide-react'
 
 const API_BASE_URL = 'https://visteria.vercel.app'
 
@@ -95,10 +95,13 @@ export default function Dashboard() {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
         const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
         const visits = allVisitDates.filter((visitDate) => visitDate >= date && visitDate < nextDate).length
+        const monthLabel = date.toLocaleDateString('en-US', { month: 'short' })
+        const yearLabel = date.getFullYear()
 
         points.push({
           label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
           shortLabel: date.toLocaleDateString('en-US', { month: 'short' }),
+          peakLabel: `${monthLabel}-${yearLabel}`,
           visits,
         })
       }
@@ -109,10 +112,12 @@ export default function Dashboard() {
         const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
         const nextDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1)
         const visits = allVisitDates.filter((visitDate) => visitDate >= date && visitDate < nextDate).length
+        const monthLabel = date.toLocaleDateString('en-US', { month: 'short' })
 
         points.push({
           label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           shortLabel: String(date.getDate()),
+          peakLabel: `${date.getDate()}-${monthLabel}`,
           visits,
         })
       }
@@ -123,10 +128,12 @@ export default function Dashboard() {
         const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
         const nextDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1)
         const visits = allVisitDates.filter((visitDate) => visitDate >= date && visitDate < nextDate).length
+        const dayLabel = date.toLocaleDateString('en-US', { weekday: 'short' })
 
         points.push({
           label: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
           shortLabel: date.toLocaleDateString('en-US', { weekday: 'short' }),
+          peakLabel: `${dayLabel}-${date.getDate()}`,
           visits,
         })
       }
@@ -141,6 +148,7 @@ export default function Dashboard() {
         points.push({
           label: date.toLocaleTimeString('en-US', { hour: 'numeric' }),
           shortLabel: date.toLocaleTimeString('en-US', { hour: 'numeric' }),
+          peakLabel: date.toLocaleTimeString('en-US', { hour: 'numeric' }),
           visits,
         })
       }
@@ -167,7 +175,7 @@ export default function Dashboard() {
       points,
       maxVisits,
       peakIndex,
-      peakLabel: points[peakIndex]?.shortLabel || '-',
+      peakLabel: points[peakIndex]?.peakLabel || points[peakIndex]?.shortLabel || '-',
       tickIndexes: tickIndexesByMode[trendMode],
       subtitle: subtitleByMode[trendMode],
     }
@@ -272,25 +280,25 @@ export default function Dashboard() {
       </div>
 
       {projects.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
+        <div className="grid grid-cols-2 gap-3">
+          {/* <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
             <div className="flex items-center gap-2 mb-2">
               <Globe className="w-4 h-4 text-black/40 dark:text-white/40" />
               <span className="text-xs font-medium text-black/50 dark:text-white/50">Sites</span>
             </div>
             <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{globalStats.totalSites}</p>
-          </div>
+          </div> */}
           <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
             <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-4 h-4 text-black/40 dark:text-white/40" />
-              <span className="text-xs font-medium text-black/50 dark:text-white/50">Today</span>
+              <Eye className="w-4 h-4 text-black/40 dark:text-white/40" />
+              <span className="text-xs font-medium text-black/50 dark:text-white/50">Today's Views</span>
             </div>
             <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{globalStats.todayVisits}</p>
           </div>
           <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Users className="w-4 h-4 text-black/40 dark:text-white/40" />
-              <span className="text-xs font-medium text-black/50 dark:text-white/50">Total</span>
+              <Globe className="w-4 h-4 text-black/40 dark:text-white/40" />
+              <span className="text-xs font-medium text-black/50 dark:text-white/50">Total Visits</span>
             </div>
             <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{globalStats.totalVisits}</p>
           </div>
@@ -303,7 +311,7 @@ export default function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
               <div className="flex items-center justify-between gap-2 w-full">
-                <h2 className="text-sm font-medium text-black dark:text-white">Total Visits Trend</h2>
+                <h2 className="text-sm font-medium text-black dark:text-white">Visit Trends</h2>
                 <p className="text-xs text-black/40 dark:text-white/40 whitespace-nowrap">Peak: <span className="text-black dark:text-white font-medium">{trendData.peakLabel}</span></p>
               </div>
               <p className="text-xs text-black/40 dark:text-white/40 mt-0.5">{trendData.subtitle}</p>
@@ -436,7 +444,7 @@ export default function Dashboard() {
               
               <div className="grid grid-cols-3 gap-3">
                 <div className="flex items-center gap-2">
-                  <TrendingUp className="w-3.5 h-3.5 text-black/30 dark:text-white/30" />
+                  <Eye className="w-3.5 h-3.5 text-black/30 dark:text-white/30" />
                   <div>
                     <p className="text-lg font-semibold tabular-nums text-black dark:text-white leading-tight">{project.todayVisits || 0}</p>
                     <p className="text-[10px] text-black/40 dark:text-white/40">Today</p>

@@ -68,14 +68,6 @@ export default function Settings() {
   const [copied, setCopied] = useState('')
 
   const trackingSnippet = useMemo(() => buildTrackingSnippet(siteId, siteUrl), [siteId, siteUrl])
-  
-  const envExample = `# Visteria Dashboard
-VITE_TRACKING_API_KEY=your-api-key
-
-# Tracking allowlist (recommended)
-VISTERIA_TRACKING_ALLOWED_HOSTS=mysite.com,www.mysite.com
-VISTERIA_TRACKING_SITE_HOSTS_JSON={"my-portfolio":["mysite.com","www.mysite.com"]}
-VISTERIA_TRACKING_ALLOWED_SITE_IDS=my-portfolio`
 
   function copyToClipboard(text, type) {
     navigator.clipboard.writeText(text)
@@ -135,23 +127,6 @@ VISTERIA_TRACKING_ALLOWED_SITE_IDS=my-portfolio`
             </p>
           </div>
         </div>
-      </div>
-
-      {/* Environment Variables */}
-      <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-medium text-black dark:text-white">Environment Variables</h2>
-          <button
-            onClick={() => copyToClipboard(envExample, 'env')}
-            className="inline-flex items-center gap-1 text-xs font-medium text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white transition"
-          >
-            {copied === 'env' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied === 'env' ? 'Copied' : 'Copy'}
-          </button>
-        </div>
-        <pre className="p-3 text-xs font-mono bg-black/[0.03] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 rounded-lg overflow-x-auto text-black/80 dark:text-white/80 leading-relaxed">
-          {envExample}
-        </pre>
       </div>
     </div>
   )

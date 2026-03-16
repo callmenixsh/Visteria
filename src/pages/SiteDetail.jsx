@@ -147,27 +147,34 @@ export default function SiteDetail() {
     const firstVisitEver = sortedByFirst[0]?.firstSeenAt
     const lastActivity = sortedByLast[0]?.lastSeenAt
 
-    // Visits by day of week
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const visitsByDay = dayNames.map(() => 0)
-    allVisits.forEach(v => {
-      visitsByDay[v.date.getDay()]++
-    })
-    const maxDayVisits = Math.max(...visitsByDay, 1)
-    const peakDayIndex = visitsByDay.indexOf(maxDayVisits)
-    const peakDay = dayNames[peakDayIndex]
+    // Previous 7 complete days (yesterday back to 6 days prior)
+    const MS_IN_DAY = 24 * 60 * 60 * 1000
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const lastWeekDays = []
 
-    // Visits by hour
-    const visitsByHour = Array(24).fill(0)
-    allVisits.forEach(v => {
-      visitsByHour[v.date.getHours()]++
-    })
-    const maxHourVisits = Math.max(...visitsByHour, 1)
-    const peakHourIndex = visitsByHour.indexOf(maxHourVisits)
-    const peakHour = `${peakHourIndex}:00`
+    for (let i = 7; i >= 1; i--) {
+      const start = new Date(todayStart.getTime() - i * MS_IN_DAY)
+      const end = new Date(start.getTime() + MS_IN_DAY)
+      lastWeekDays.push({
+        date: start,
+        start,
+        end,
+        dateKey: start.toDateString(),
+        dayLabel: start.toLocaleDateString('en-US', { weekday: 'short' }),
+        shortDateLabel: start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      })
+    }
+
+    const visitsByDay = lastWeekDays.map((day) =>
+      allVisits.filter((visit) => visit.date >= day.start && visit.date < day.end).length
+    )
+
+    const rawMaxDayVisits = Math.max(...visitsByDay, 0)
+    const maxDayVisits = Math.max(rawMaxDayVisits, 1)
+    const peakDayIndex = Math.max(0, visitsByDay.indexOf(rawMaxDayVisits))
 
     // Yearly trend (last 12 months)
-    const now = new Date()
     const last12Months = []
     for (let i = 11; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -212,13 +219,10 @@ export default function SiteDetail() {
       firstVisitEver,
       lastActivity,
       visitsByDay,
-      dayNames,
+      lastWeekDays,
       maxDayVisits,
       peakDayIndex,
-      peakDay,
-      visitsByHour,
-      maxHourVisits,
-      peakHour,
+      allVisits,
       recentVisitors,
       bestDay,
       last12Months,
@@ -240,34 +244,39 @@ export default function SiteDetail() {
     setActiveHourTooltipIndex(null)
   }, [selectedDayIndex])
 
+  function handleSelectDayIndex(dayIndex) {
+    setSelectedDayIndex(dayIndex)
+    setActiveDayTooltipIndex((prev) => (prev === dayIndex ? null : dayIndex))
+  }
+
   const hourlyStatsForSelectedDay = useMemo(() => {
-    const targetDay = selectedDayIndex ?? 0
+    if (!stats?.lastWeekDays?.length) {
+      return {
+        visitsByHour: Array(24).fill(0),
+        maxHourVisits: 1,
+        peakHour: '0:00',
+      }
+    }
+
+    const targetDay = stats.lastWeekDays[selectedDayIndex ?? stats.peakDayIndex] || stats.lastWeekDays[0]
     const visitsByHour = Array(24).fill(0)
 
-    visitors.forEach((visitor) => {
-      ;(visitor.visits || []).forEach((visit) => {
-        const parsedDate = getVisitDate(visit, visitor)
-        if (!parsedDate) {
-          return
-        }
-
-        if (parsedDate.getDay() !== targetDay) {
-          return
-        }
-
-        visitsByHour[parsedDate.getHours()]++
-      })
+    stats.allVisits.forEach((visit) => {
+      if (visit.date >= targetDay.start && visit.date < targetDay.end) {
+        visitsByHour[visit.date.getHours()]++
+      }
     })
 
-    const maxHourVisits = Math.max(...visitsByHour, 1)
-    const peakHourIndex = visitsByHour.indexOf(maxHourVisits)
+    const rawMaxHourVisits = Math.max(...visitsByHour, 0)
+    const maxHourVisits = Math.max(rawMaxHourVisits, 1)
+    const peakHourIndex = Math.max(0, visitsByHour.indexOf(rawMaxHourVisits))
 
     return {
       visitsByHour,
       maxHourVisits,
       peakHour: `${peakHourIndex}:00`,
     }
-  }, [visitors, selectedDayIndex])
+  }, [stats, selectedDayIndex])
 
   if (loading) {
     return (
@@ -376,24 +385,27 @@ export default function SiteDetail() {
             <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-xs font-medium text-black/60 dark:text-white/60">Activity by Day</p>
-                <p className="text-xs text-black/40 dark:text-white/40">Selected: <span className="text-black dark:text-white font-medium">{stats.dayNames[selectedDayIndex ?? stats.peakDayIndex]}</span></p>
+                <p className="text-xs text-black/40 dark:text-white/40">
+                  Peak: <span className="text-black dark:text-white font-medium"> {stats.lastWeekDays[stats.peakDayIndex]?.shortDateLabel}</span>
+                </p>
               </div>
               <div className="flex items-end h-24 gap-[2px]">
                 {stats.visitsByDay.map((count, i) => {
                   const height = stats.maxDayVisits > 0 ? (count / stats.maxDayVisits) * 80 : 0
                   const isSelected = i === (selectedDayIndex ?? stats.peakDayIndex)
+                  const day = stats.lastWeekDays[i]
                   return (
-                    <div key={i} className="flex-1 h-full relative group z-0 hover:z-20">
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => handleSelectDayIndex(i)}
+                      aria-label={`Show hourly activity for ${day.dayLabel} ${day.shortDateLabel}`}
+                      className="flex-1 h-full relative group z-0 hover:z-20"
+                    >
                       <span className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full z-30 text-[9px] font-medium text-black dark:text-white transition-opacity whitespace-nowrap tabular-nums pointer-events-none ${activeDayTooltipIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                        {stats.dayNames[i]} ({count})
+                        {day.shortDateLabel} ({count})
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedDayIndex(i)
-                          setActiveDayTooltipIndex((prev) => (prev === i ? null : i))
-                        }}
-                        aria-label={`Show hourly activity for ${stats.dayNames[i]}`}
+                      <div
                         className={`absolute bottom-0 left-0 right-0 rounded-sm transition-all duration-200 cursor-pointer ${
                           isSelected
                             ? 'bg-black dark:bg-white'
@@ -401,22 +413,24 @@ export default function SiteDetail() {
                         }`}
                         style={{ height: `${height}%`, minHeight: count > 0 ? '3px' : '1px' }}
                       />
-                    </div>
+                    </button>
                   )
                 })}
               </div>
               <div className="flex text-[10px] mt-2">
-                {stats.dayNames.map((day, i) => {
+                {stats.lastWeekDays.map((day, i) => {
                   const isSelected = i === (selectedDayIndex ?? stats.peakDayIndex)
                   return (
-                    <span
-                      key={day}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectDayIndex(i)}
+                      key={day.dateKey}
                       className={`flex-1 text-center transition-colors ${
                         isSelected ? 'text-black dark:text-white font-medium' : 'text-black/40 dark:text-white/40'
                       }`}
                     >
-                      {day}
-                    </span>
+                      {day.dayLabel}
+                    </button>
                   )
                 })}
               </div>
@@ -425,7 +439,9 @@ export default function SiteDetail() {
             <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-xs font-medium text-black/60 dark:text-white/60">Activity by Hour</p>
-                <p className="text-xs text-black/40 dark:text-white/40">Peak: <span className="text-black dark:text-white font-medium">{hourlyStatsForSelectedDay.peakHour}</span></p>
+                <p className="text-xs text-black/40 dark:text-white/40">
+                   Peak: <span className="text-black dark:text-white font-medium">{hourlyStatsForSelectedDay.peakHour}</span>
+                </p>
               </div>
               <div className="flex items-end h-24 gap-[2px]">
                 {hourlyStatsForSelectedDay.visitsByHour.map((count, i) => {

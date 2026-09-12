@@ -1,17 +1,9 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useTheme } from '../contexts/ThemeContext'
 import { Moon, Sun, Monitor, RefreshCw, Github, Heart, Code } from 'lucide-react'
 
 export default function Layout({ children }) {
-  const location = useLocation()
   const { theme, setTheme } = useTheme()
-  
-  const isActive = (path) => {
-    if (path === '/') {
-      return location.pathname === '/'
-    }
-    return location.pathname.startsWith(path)
-  }
 
   return (
     <div className="min-h-screen bg-white dark:bg-black flex flex-col">

@@ -1,5 +1,8 @@
 import { getVisitsCollection, verifyApiKey } from '../_lib/db.js'
 
+const DEFAULT_LIMIT = 200
+const MAX_LIMIT = 200
+
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -26,33 +29,60 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing siteId parameter' })
     }
 
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || DEFAULT_LIMIT, 1),
+      MAX_LIMIT,
+    )
+    const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0)
+
     const visitsCollection = await getVisitsCollection()
+
+    const [siteAgg] = await visitsCollection
+      .aggregate([
+        { $match: { siteId } },
+        {
+          $group: {
+            _id: null,
+            siteName: { $last: '$siteName' },
+            siteUrl: { $last: '$siteUrl' },
+            firstSeenAt: { $min: '$firstSeenAt' },
+            totalVisits: {
+              $sum: { $ifNull: ['$visitCount', { $size: { $ifNull: ['$visits', []] } }] },
+            },
+            uniqueVisitors: { $sum: 1 },
+          },
+        },
+      ])
+      .toArray()
+
+    const totalVisitors = await visitsCollection.countDocuments({ siteId })
+
+    const siteInfo = siteAgg
+      ? {
+          siteId,
+          siteName: siteAgg.siteName || siteId,
+          siteUrl: siteAgg.siteUrl || null,
+          firstSeenAt: siteAgg.firstSeenAt || null,
+          totalVisits: siteAgg.totalVisits,
+          uniqueVisitors: siteAgg.uniqueVisitors,
+        }
+      : null
 
     const visitors = await visitsCollection
       .find({ siteId })
       .sort({ lastSeenAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .toArray()
-
-    // Get siteUrl from stored data (first visitor that has it)
-    const siteUrl = visitors.find(v => v.siteUrl)?.siteUrl || null
-
-    const siteInfo = visitors.length > 0
-      ? {
-          siteId,
-          siteName: visitors[0].siteName || siteId,
-          siteUrl,
-          totalVisits: visitors.reduce((sum, v) => sum + (v.visits?.length || 0), 0),
-          uniqueVisitors: visitors.length,
-        }
-      : null
 
     return res.json({
       site: siteInfo,
+      totalVisitors,
       visitors: visitors.map((v) => ({
         visitorHash: v.visitorHash,
         firstSeenAt: v.firstSeenAt,
         lastSeenAt: v.lastSeenAt,
-        visitCount: v.visits?.length || 0,
+        visitCount: v.visitCount != null ? v.visitCount : (v.visits?.length || 0),
         visits: (v.visits || []).slice().reverse(),
       })),
     })

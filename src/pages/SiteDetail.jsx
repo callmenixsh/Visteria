@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, ExternalLink, Users, Globe } from 'lucide-react'
-
-const API_BASE_URL = 'https://visteria.vercel.app'
+import { getApiBaseUrl } from '../config'
+import TrendChart from '../components/TrendChart'
+import HeatmapCard from '../components/HeatmapCard'
 
 function isToday(date) {
   const today = new Date()
@@ -59,13 +60,89 @@ function getVisitDate(visit, visitor) {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
+function getPagePath(url) {
+  const raw = String(url || '')
+  try {
+    const parsed = new URL(raw)
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.pathname === '' ? '/' : parsed.pathname
+    }
+  } catch {
+    // fall through to raw string
+  }
+  const withoutQuery = raw.split('?')[0].split('#')[0]
+  return withoutQuery || '(unknown)'
+}
+
+function getReferrerHost(referrer) {
+  if (!referrer) {
+    return '(direct)'
+  }
+  try {
+    return new URL(String(referrer)).hostname.replace(/^www\./, '') || '(direct)'
+  } catch {
+    return '(other)'
+  }
+}
+
+function topBreakdown(source, keyFn) {
+  const counts = new Map()
+  source.forEach((visit) => {
+    const key = keyFn(visit)
+    counts.set(key, (counts.get(key) || 0) + 1)
+  })
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8)
+}
+
+function lastNDays(count, dayLabelFn) {
+  const MS_IN_DAY = 24 * 60 * 60 * 1000
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const days = []
+  for (let i = count - 1; i >= 0; i--) {
+    const start = new Date(todayStart.getTime() - i * MS_IN_DAY)
+    days.push({
+      date: start,
+      start,
+      end: new Date(start.getTime() + MS_IN_DAY),
+      dateKey: start.toDateString(),
+      dayLabel: dayLabelFn(start),
+    })
+  }
+  return days
+}
+
+function buildHourHeatmap(days, allVisits) {
+  return days.map((day) => {
+    const cells = Array(24).fill(0)
+    allVisits.forEach((visit) => {
+      if (visit.date >= day.start && visit.date < day.end) {
+        cells[visit.date.getHours()] += 1
+      }
+    })
+    return { dateKey: day.dateKey, dayLabel: day.dayLabel, date: day.date, cells }
+  })
+}
+
+function findHeatmapPeak(rows) {
+  const raw = Math.max(...rows.flatMap((row) => row.cells))
+  if (raw <= 0) return null
+  for (const row of rows) {
+    const hour = row.cells.indexOf(raw)
+    if (hour !== -1) {
+      return { label: `${row.dayLabel} ${hour}:00`, count: raw }
+    }
+  }
+  return null
+}
+
 export default function SiteDetail() {
   const { siteId } = useParams()
   const [site, setSite] = useState(null)
   const [visitors, setVisitors] = useState([])
-  const [selectedDayIndex, setSelectedDayIndex] = useState(null)
-  const [activeDayTooltipIndex, setActiveDayTooltipIndex] = useState(null)
-  const [activeHourTooltipIndex, setActiveHourTooltipIndex] = useState(null)
   const [activeYearTooltipIndex, setActiveYearTooltipIndex] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -85,7 +162,7 @@ export default function SiteDetail() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/sites/${encodeURIComponent(siteId)}`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/sites/${encodeURIComponent(siteId)}?limit=200`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -147,34 +224,22 @@ export default function SiteDetail() {
     const firstVisitEver = sortedByFirst[0]?.firstSeenAt
     const lastActivity = sortedByLast[0]?.lastSeenAt
 
-    // Previous 7 complete days (yesterday back to 6 days prior)
-    const MS_IN_DAY = 24 * 60 * 60 * 1000
-    const now = new Date()
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const lastWeekDays = []
-
-    for (let i = 7; i >= 1; i--) {
-      const start = new Date(todayStart.getTime() - i * MS_IN_DAY)
-      const end = new Date(start.getTime() + MS_IN_DAY)
-      lastWeekDays.push({
-        date: start,
-        start,
-        end,
-        dateKey: start.toDateString(),
-        dayLabel: start.toLocaleDateString('en-US', { weekday: 'short' }),
-        shortDateLabel: start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      })
-    }
-
-    const visitsByDay = lastWeekDays.map((day) =>
-      allVisits.filter((visit) => visit.date >= day.start && visit.date < day.end).length
+    // Week and month hourly heatmaps
+    const weekHeatmap = buildHourHeatmap(
+      lastNDays(7, (d) => d.toLocaleDateString('en-US', { weekday: 'short' })),
+      allVisits,
     )
+    const heatmapMax = Math.max(1, ...weekHeatmap.flatMap((row) => row.cells))
+    const heatmapPeak = findHeatmapPeak(weekHeatmap)
 
-    const rawMaxDayVisits = Math.max(...visitsByDay, 0)
-    const maxDayVisits = Math.max(rawMaxDayVisits, 1)
-    const peakDayIndex = Math.max(0, visitsByDay.indexOf(rawMaxDayVisits))
+    // Top pages / referrers for the loaded window
+    const topPages = topBreakdown(allVisits, (visit) => getPagePath(visit.url))
+    const maxPageVisits = Math.max(...topPages.map((entry) => entry.count), 1)
+    const topReferrers = topBreakdown(allVisits, (visit) => getReferrerHost(visit.referrer))
+    const maxReferrerVisits = Math.max(...topReferrers.map((entry) => entry.count), 1)
 
     // Yearly trend (last 12 months)
+    const now = new Date()
     const last12Months = []
     for (let i = 11; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -218,10 +283,13 @@ export default function SiteDetail() {
       monthUniqueVisitors,
       firstVisitEver,
       lastActivity,
-      visitsByDay,
-      lastWeekDays,
-      maxDayVisits,
-      peakDayIndex,
+      weekHeatmap,
+      heatmapMax,
+      heatmapPeak,
+      topPages,
+      maxPageVisits,
+      topReferrers,
+      maxReferrerVisits,
       allVisits,
       recentVisitors,
       bestDay,
@@ -232,56 +300,35 @@ export default function SiteDetail() {
     }
   }, [visitors])
 
-  useEffect(() => {
-    if (!stats) {
-      return
-    }
-
-    setSelectedDayIndex((prev) => (prev === null ? stats.peakDayIndex : prev))
-  }, [stats])
-
-  useEffect(() => {
-    setActiveHourTooltipIndex(null)
-  }, [selectedDayIndex])
-
-  function handleSelectDayIndex(dayIndex) {
-    setSelectedDayIndex(dayIndex)
-    setActiveDayTooltipIndex((prev) => (prev === dayIndex ? null : dayIndex))
-  }
-
-  const hourlyStatsForSelectedDay = useMemo(() => {
-    if (!stats?.lastWeekDays?.length) {
-      return {
-        visitsByHour: Array(24).fill(0),
-        maxHourVisits: 1,
-        peakHour: '0:00',
-      }
-    }
-
-    const targetDay = stats.lastWeekDays[selectedDayIndex ?? stats.peakDayIndex] || stats.lastWeekDays[0]
-    const visitsByHour = Array(24).fill(0)
-
-    stats.allVisits.forEach((visit) => {
-      if (visit.date >= targetDay.start && visit.date < targetDay.end) {
-        visitsByHour[visit.date.getHours()]++
-      }
-    })
-
-    const rawMaxHourVisits = Math.max(...visitsByHour, 0)
-    const maxHourVisits = Math.max(rawMaxHourVisits, 1)
-    const peakHourIndex = Math.max(0, visitsByHour.indexOf(rawMaxHourVisits))
-
-    return {
-      visitsByHour,
-      maxHourVisits,
-      peakHour: `${peakHourIndex}:00`,
-    }
-  }, [stats, selectedDayIndex])
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-black/20 dark:border-white/20 border-t-black dark:border-t-white rounded-full animate-spin" />
+      <div className="space-y-4 animate-pulse">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="h-4 w-12 rounded bg-black/10 dark:bg-white/10 mb-2" />
+            <div className="h-7 w-52 rounded bg-black/10 dark:bg-white/10" />
+            <div className="h-4 w-40 rounded bg-black/10 dark:bg-white/10 mt-2" />
+          </div>
+          <div className="h-9 w-20 rounded-lg bg-black/10 dark:bg-white/10" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="h-24 rounded-xl border border-black/[0.08] dark:border-white/[0.08]" />
+          <div className="h-24 rounded-xl border border-black/[0.08] dark:border-white/[0.08]" />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="h-24 rounded-xl border border-black/[0.08] dark:border-white/[0.08]" />
+          <div className="h-24 rounded-xl border border-black/[0.08] dark:border-white/[0.08]" />
+          <div className="h-24 rounded-xl border border-black/[0.08] dark:border-white/[0.08]" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="h-48 rounded-xl border border-black/[0.08] dark:border-white/[0.08]" />
+          <div className="h-48 rounded-xl border border-black/[0.08] dark:border-white/[0.08]" />
+        </div>
+        <div className="h-56 rounded-xl border border-black/[0.08] dark:border-white/[0.08]" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="h-40 rounded-xl border border-black/[0.08] dark:border-white/[0.08]" />
+          <div className="h-40 rounded-xl border border-black/[0.08] dark:border-white/[0.08]" />
+        </div>
       </div>
     )
   }
@@ -327,6 +374,11 @@ export default function SiteDetail() {
             Back
           </Link>
           <h1 className="text-xl font-semibold text-black dark:text-white truncate">{site.siteName || site.siteId}</h1>
+          {site.firstSeenAt && (
+            <p className="text-sm text-black/50 dark:text-white/50 mt-1">
+              First tracked {formatDate(site.firstSeenAt)}
+            </p>
+          )}
         </div>
         {siteUrl && (
           <a
@@ -341,213 +393,74 @@ export default function SiteDetail() {
         )}
       </div>
 
-      {/* Primary Stats */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Globe className="w-3.5 h-3.5 text-black/40 dark:text-white/40" />
-            <p className="text-xs text-black/50 dark:text-white/50">Total Visits</p>
+      {/* Overview: metrics + heatmap */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-3 items-start">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Globe className="w-3.5 h-3.5 text-black/40 dark:text-white/40" />
+                <p className="text-xs text-black/50 dark:text-white/50">Total Visits</p>
+              </div>
+              <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{site.totalVisits || 0}</p>
+            </div>
+            <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Users className="w-3.5 h-3.5 text-black/40 dark:text-white/40" />
+                <p className="text-xs text-black/50 dark:text-white/50">Unique Visitors</p>
+              </div>
+              <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{site.uniqueVisitors || 0}</p>
+            </div>
           </div>
-          <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{site.totalVisits || 0}</p>
+          {stats && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
+                <p className="text-xs text-black/50 dark:text-white/50 mb-1">Today</p>
+                <p className="text-xl font-semibold tabular-nums text-black dark:text-white">{stats.todayVisits}</p>
+                <p className="text-xs text-black/40 dark:text-white/40 tabular-nums">{stats.todayUniqueVisitors} unique</p>
+              </div>
+              <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
+                <p className="text-xs text-black/50 dark:text-white/50 mb-1">This Week</p>
+                <p className="text-xl font-semibold tabular-nums text-black dark:text-white">{stats.weekVisits}</p>
+                <p className="text-xs text-black/40 dark:text-white/40 tabular-nums">{stats.weekUniqueVisitors} unique</p>
+              </div>
+              <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
+                <p className="text-xs text-black/50 dark:text-white/50 mb-1">This Month</p>
+                <p className="text-xl font-semibold tabular-nums text-black dark:text-white">{stats.monthVisits}</p>
+                <p className="text-xs text-black/40 dark:text-white/40 tabular-nums">{stats.monthUniqueVisitors} unique</p>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Users className="w-3.5 h-3.5 text-black/40 dark:text-white/40" />
-            <p className="text-xs text-black/50 dark:text-white/50">Unique Visitors</p>
+        {stats && (
+          <div className="self-start w-fit">
+            <HeatmapCard
+              title="Week Activity Heatmap"
+              peak={stats.heatmapPeak}
+              rows={stats.weekHeatmap}
+              max={stats.heatmapMax}
+              cellSize={12}
+              gap={2}
+            />
           </div>
-          <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{site.uniqueVisitors || 0}</p>
-        </div>
+        )}
       </div>
 
-      {stats && (
-        <>
-          {/* Time-based Stats */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
-              <p className="text-xs text-black/50 dark:text-white/50 mb-1">Today</p>
-              <p className="text-xl font-semibold tabular-nums text-black dark:text-white">{stats.todayVisits}</p>
-              <p className="text-xs text-black/40 dark:text-white/40 tabular-nums">{stats.todayUniqueVisitors} unique</p>
-            </div>
-            <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
-              <p className="text-xs text-black/50 dark:text-white/50 mb-1">This Week</p>
-              <p className="text-xl font-semibold tabular-nums text-black dark:text-white">{stats.weekVisits}</p>
-              <p className="text-xs text-black/40 dark:text-white/40 tabular-nums">{stats.weekUniqueVisitors} unique</p>
-            </div>
-            <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
-              <p className="text-xs text-black/50 dark:text-white/50 mb-1">This Month</p>
-              <p className="text-xl font-semibold tabular-nums text-black dark:text-white">{stats.monthVisits}</p>
-              <p className="text-xs text-black/40 dark:text-white/40 tabular-nums">{stats.monthUniqueVisitors} unique</p>
-            </div>
-          </div>
-
-          {/* Activity Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-xs font-medium text-black/60 dark:text-white/60">Activity by Day</p>
-                <p className="text-xs text-black/40 dark:text-white/40">
-                  Peak: <span className="text-black dark:text-white font-medium"> {stats.lastWeekDays[stats.peakDayIndex]?.shortDateLabel}</span>
-                </p>
-              </div>
-              <div className="flex items-end h-24 gap-[2px]">
-                {stats.visitsByDay.map((count, i) => {
-                  const height = stats.maxDayVisits > 0 ? (count / stats.maxDayVisits) * 80 : 0
-                  const isSelected = i === (selectedDayIndex ?? stats.peakDayIndex)
-                  const day = stats.lastWeekDays[i]
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => handleSelectDayIndex(i)}
-                      aria-label={`Show hourly activity for ${day.dayLabel} ${day.shortDateLabel}`}
-                      className="flex-1 h-full relative group z-0 hover:z-20"
-                    >
-                      <span className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full z-30 text-[9px] font-medium text-black dark:text-white transition-opacity whitespace-nowrap tabular-nums pointer-events-none ${activeDayTooltipIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                        {day.shortDateLabel} ({count})
-                      </span>
-                      <div
-                        className={`absolute bottom-0 left-0 right-0 rounded-sm transition-all duration-200 cursor-pointer ${
-                          isSelected
-                            ? 'bg-black dark:bg-white'
-                            : 'bg-black/15 dark:bg-white/15 hover:bg-black/30 dark:hover:bg-white/30'
-                        }`}
-                        style={{ height: `${height}%`, minHeight: count > 0 ? '3px' : '1px' }}
-                      />
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="flex text-[10px] mt-2">
-                {stats.lastWeekDays.map((day, i) => {
-                  const isSelected = i === (selectedDayIndex ?? stats.peakDayIndex)
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => handleSelectDayIndex(i)}
-                      key={day.dateKey}
-                      className={`flex-1 text-center transition-colors ${
-                        isSelected ? 'text-black dark:text-white font-medium' : 'text-black/40 dark:text-white/40'
-                      }`}
-                    >
-                      {day.dayLabel}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-xs font-medium text-black/60 dark:text-white/60">Activity by Hour</p>
-                <p className="text-xs text-black/40 dark:text-white/40">
-                   Peak: <span className="text-black dark:text-white font-medium">{hourlyStatsForSelectedDay.peakHour}</span>
-                </p>
-              </div>
-              <div className="flex items-end h-24 gap-[2px]">
-                {hourlyStatsForSelectedDay.visitsByHour.map((count, i) => {
-                  const height = hourlyStatsForSelectedDay.maxHourVisits > 0 ? (count / hourlyStatsForSelectedDay.maxHourVisits) * 80 : 0
-                  const isPeak = i === hourlyStatsForSelectedDay.visitsByHour.indexOf(hourlyStatsForSelectedDay.maxHourVisits)
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setActiveHourTooltipIndex((prev) => (prev === i ? null : i))}
-                      className="flex-1 h-full relative group z-0 hover:z-20"
-                      aria-label={`Show hourly visits for ${i}:00`}
-                    >
-                      <span className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full z-30 text-[9px] font-medium text-black dark:text-white transition-opacity whitespace-nowrap tabular-nums pointer-events-none ${activeHourTooltipIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                        {i}:00 ({count})
-                      </span>
-                      <div 
-                        className={`absolute bottom-0 left-0 right-0 rounded-sm transition-all duration-200 cursor-default ${
-                          isPeak 
-                            ? 'bg-black dark:bg-white' 
-                            : 'bg-black/15 dark:bg-white/15 hover:bg-black/30 dark:hover:bg-white/30'
-                        }`}
-                        style={{ height: `${height}%`, minHeight: count > 0 ? '3px' : '1px' }}
-                      />
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="flex justify-between text-[10px] text-black/40 dark:text-white/40 mt-2">
-                <span>12am</span>
-                <span>6am</span>
-                <span>12pm</span>
-                <span>6pm</span>
-                <span>11pm</span>
-              </div>
-            </div>
-          </div>
-
+      
           {/* Yearly Trends */}
           <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs font-medium text-black/60 dark:text-white/60">Last 12 Months</p>
               <p className="text-xs text-black/40 dark:text-white/40">Peak: <span className="text-black dark:text-white font-medium">{stats.peakMonth}</span></p>
             </div>
-            <div className="relative h-32">
-              <svg className="w-full h-full" viewBox="0 0 300 128" preserveAspectRatio="none">
-                {/* Grid lines */}
-                {[0, 32, 64, 96, 128].map((y) => (
-                  <line
-                    key={y}
-                    x1="0"
-                    y1={y}
-                    x2="300"
-                    y2={y}
-                    className="stroke-black/[0.04] dark:stroke-white/[0.04]"
-                    strokeWidth="1"
-                  />
-                ))}
-                {/* Area fill */}
-                <path
-                  d={`
-                    M 0,${128 - Math.max(0, (stats.last12Months[0].visits / stats.maxYearlyVisits) * 120)}
-                    ${stats.last12Months.map((d, i) => {
-                      const x = (i / 11) * 300
-                      const y = 128 - Math.max(0, (d.visits / stats.maxYearlyVisits) * 120)
-                      return `L ${x},${y}`
-                    }).join(' ')}
-                    L 300,128
-                    L 0,128
-                    Z
-                  `}
-                  className="fill-black/[0.06] dark:fill-white/[0.06]"
-                />
-                {/* Line */}
-                <path
-                  d={`
-                    M 0,${128 - Math.max(0, (stats.last12Months[0].visits / stats.maxYearlyVisits) * 120)}
-                    ${stats.last12Months.map((d, i) => {
-                      const x = (i / 11) * 300
-                      const y = 128 - Math.max(0, (d.visits / stats.maxYearlyVisits) * 120)
-                      return `L ${x},${y}`
-                    }).join(' ')}
-                  `}
-                  fill="none"
-                  className="stroke-black dark:stroke-white"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              {/* Tooltip layer - rendered outside SVG for better positioning */}
-              <div className="absolute inset-0 flex">
-                {stats.last12Months.map((d, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setActiveYearTooltipIndex((prev) => (prev === i ? null : i))}
-                    className="flex-1 relative group"
-                    aria-label={`Show monthly visits for ${d.label}`}
-                  >
-                    <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black dark:bg-white text-white dark:text-black text-[10px] font-medium rounded transition-opacity whitespace-nowrap pointer-events-none z-10 ${activeYearTooltipIndex === i ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                      {d.label}: {d.visits}
-                    </div>
-                  </button>
-                ))}
-              </div>
+            <div className="relative">
+              <TrendChart
+                points={stats.last12Months}
+                maxVisits={stats.maxYearlyVisits}
+                activeIndex={activeYearTooltipIndex}
+                onSelect={(i) => setActiveYearTooltipIndex((prev) => (prev === i ? null : i))}
+                height="h-32"
+              />
             </div>
             <div className="flex justify-between text-[10px] text-black/40 dark:text-white/40 mt-2">
               {[0, 2, 4, 6, 8, 10].map((i) => (
@@ -558,6 +471,71 @@ export default function SiteDetail() {
             </div>
           </div>
 
+      {stats && (
+        <>
+          {/* Page & Referrer Breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-black/60 dark:text-white/60">Top Pages</p>
+                <p className="text-xs text-black/40 dark:text-white/40">{stats.allVisits.length} visits</p>
+              </div>
+              {stats.topPages.length ? (
+                <ul className="space-y-2.5">
+                  {stats.topPages.map((entry, i) => (
+                    <li key={entry.name}>
+                      <div className="flex items-center justify-between gap-2 text-xs mb-1">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-black/30 dark:text-white/30 tabular-nums text-[10px] w-3 flex-shrink-0">{i + 1}</span>
+                          <span className="truncate font-medium text-black/75 dark:text-white/75">{entry.name}</span>
+                        </span>
+                        <span className="tabular-nums text-black/45 dark:text-white/45 flex-shrink-0">{entry.count}</span>
+                      </div>
+                      <div className="ml-4 h-1 rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-black/40 dark:bg-white/40"
+                          style={{ width: `${(entry.count / stats.maxPageVisits) * 100}%` }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-black/35 dark:text-white/35">No page data in this window</p>
+              )}
+            </div>
+
+            <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-black/60 dark:text-white/60">Top Referrers</p>
+              </div>
+              {stats.topReferrers.length ? (
+                <ul className="space-y-2.5">
+                  {stats.topReferrers.map((entry, i) => (
+                    <li key={entry.name}>
+                      <div className="flex items-center justify-between gap-2 text-xs mb-1">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-black/30 dark:text-white/30 tabular-nums text-[10px] w-3 flex-shrink-0">{i + 1}</span>
+                          <span className="truncate font-medium text-black/75 dark:text-white/75">{entry.name}</span>
+                        </span>
+                        <span className="tabular-nums text-black/45 dark:text-white/45 flex-shrink-0">{entry.count}</span>
+                      </div>
+                      <div className="ml-4 h-1 rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-black/40 dark:bg-white/40"
+                          style={{ width: `${(entry.count / stats.maxReferrerVisits) * 100}%` }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-black/35 dark:text-white/35">No referrer data in this window</p>
+              )}
+            </div>
+          </div>
+
+
           {/* Timeline & Recent */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4">
@@ -565,7 +543,7 @@ export default function SiteDetail() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-black/50 dark:text-white/50">First visit</span>
-                  <span className="text-sm text-black dark:text-white font-medium">{formatDate(stats.firstVisitEver)}</span>
+                  <span className="text-sm text-black dark:text-white font-medium">{formatDate(site.firstSeenAt || stats.firstVisitEver)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-black/50 dark:text-white/50">Last activity</span>
@@ -587,7 +565,14 @@ export default function SiteDetail() {
               <div className="space-y-2">
                 {stats.recentVisitors.map((v, i) => (
                   <div key={i} className="flex items-center justify-between py-1 border-b border-black/[0.04] dark:border-white/[0.04] last:border-0">
-                    <span className="text-sm text-black/50 dark:text-white/50">{formatRelativeTime(v.lastSeenAt)}</span>
+                    <div className="min-w-0 pr-3">
+                      <span className="text-sm text-black/50 dark:text-white/50">{formatRelativeTime(v.lastSeenAt)}</span>
+                      {v.visits?.[0]?.url && (
+                        <p className="text-[11px] text-black/40 dark:text-white/40 truncate mt-0.5">
+                          {v.visits[0].url}
+                        </p>
+                      )}
+                    </div>
                     <span className="text-sm text-black dark:text-white font-medium tabular-nums">
                       {v.visitCount} {v.visitCount === 1 ? 'visit' : 'visits'}
                     </span>

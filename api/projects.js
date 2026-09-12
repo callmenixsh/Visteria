@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       .aggregate([
         {
           $addFields: {
-            visitsCount: { $size: { $ifNull: ['$visits', []] } },
+            totalCount: { $ifNull: ['$visitCount', { $size: { $ifNull: ['$visits', []] } }] },
             todayVisitsCount: {
               $size: {
                 $filter: {
@@ -52,7 +52,8 @@ export default async function handler(req, res) {
           $group: {
             _id: '$siteId',
             siteName: { $last: '$siteName' },
-            totalVisits: { $sum: '$visitsCount' },
+            firstSeenAt: { $min: '$firstSeenAt' },
+            totalVisits: { $sum: '$totalCount' },
             uniqueVisitors: { $sum: 1 },
             todayVisits: { $sum: '$todayVisitsCount' },
           },
@@ -62,6 +63,7 @@ export default async function handler(req, res) {
             _id: 0,
             siteId: '$_id',
             siteName: 1,
+            firstSeenAt: 1,
             totalVisits: 1,
             uniqueVisitors: 1,
             todayVisits: 1,

@@ -1,6 +1,12 @@
 import crypto from 'node:crypto'
 import { getVisitsCollection } from '../_lib/db.js'
 
+const MAX_BODY_BYTES = 32_000
+const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_MAX_REQUESTS = 60
+const RATE_LIMIT_MAX_BUCKETS = 10_000
+const rateBuckets = new Map()
+
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -16,6 +22,15 @@ export default async function handler(req, res) {
   }
 
   // Track endpoint is public - no auth required
+
+  const contentLength = Number(req.headers['content-length'] || 0)
+  if (contentLength > MAX_BODY_BYTES) {
+    return res.status(413).json({ error: 'Payload too large' })
+  }
+
+  if (isRateLimited(req)) {
+    return res.status(429).json({ error: 'Too many requests' })
+  }
 
   try {
     const { siteId, siteName, siteUrl, url, referrer, userAgent, visitedAt, visitorId } = req.body || {}
@@ -51,12 +66,16 @@ export default async function handler(req, res) {
       $setOnInsert: {
         siteId: safeSiteId,
         visitorHash,
+        visitCount: 0,
         firstSeenAt: new Date(),
       },
       $set: {
         siteName: safeSiteName,
         lastSeenAt: new Date(),
         lastUserAgent: safeUserAgent,
+      },
+      $inc: {
+        visitCount: 1,
       },
       $push: {
         visits: {
@@ -90,7 +109,34 @@ export default async function handler(req, res) {
   }
 }
 
-function normalizeIsoDate(value) {
+function getClientIp(req) {
+  const forwardedFor = String(req.headers['x-forwarded-for'] || '')
+  return forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
+}
+
+function isRateLimited(req) {
+  const now = Date.now()
+  const key = getClientIp(req)
+
+  if (rateBuckets.size >= RATE_LIMIT_MAX_BUCKETS) {
+    for (const [bucketKey, bucket] of rateBuckets) {
+      if (now > bucket.resetAt) {
+        rateBuckets.delete(bucketKey)
+      }
+    }
+  }
+
+  const existing = rateBuckets.get(key)
+  if (!existing || now > existing.resetAt) {
+    rateBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
+    return false
+  }
+
+  existing.count += 1
+  return existing.count > RATE_LIMIT_MAX_REQUESTS
+}
+
+export function normalizeIsoDate(value) {
   const asString = String(value || '').trim()
   if (!asString) return null
 
@@ -100,16 +146,19 @@ function normalizeIsoDate(value) {
   return date
 }
 
-function buildVisitorHash(req, siteId, visitorId) {
+function hashValue(value) {
+  return crypto.createHash('sha256').update(value).digest('hex')
+}
+
+export function buildVisitorHash(req, siteId, visitorId) {
   if (visitorId) {
-    return crypto.createHash('sha256').update(`${siteId}|vid|${visitorId}`).digest('hex')
+    return hashValue(`${siteId}|vid|${visitorId}`)
   }
 
-  const forwardedFor = String(req.headers['x-forwarded-for'] || '')
-  const ip = forwardedFor.split(',')[0]?.trim() || req.socket?.remoteAddress || ''
+  const ip = getClientIp(req)
   const userAgent = String(req.headers['user-agent'] || '')
 
-  return crypto.createHash('sha256').update(`${siteId}|${ip}|${userAgent}`).digest('hex')
+  return hashValue(`${siteId}|${ip}|${userAgent}`)
 }
 
 function parseCsvEnvSet(value) {
@@ -206,7 +255,7 @@ function normalizeSiteId(value) {
   return String(value || '').trim().toLowerCase()
 }
 
-function validateTrackingAllowlist(req, { siteId, url, siteUrl }) {
+export function validateTrackingAllowlist(req, { siteId, url, siteUrl }) {
   const allowedHostsGlobal = parseCsvEnvSet(process.env.VISTERIA_TRACKING_ALLOWED_HOSTS)
   const allowedSiteIds = parseCsvEnvSet(process.env.VISTERIA_TRACKING_ALLOWED_SITE_IDS)
   const siteHostsMap = parseSiteHostsMap(process.env.VISTERIA_TRACKING_SITE_HOSTS_JSON)
@@ -240,6 +289,16 @@ function validateTrackingAllowlist(req, { siteId, url, siteUrl }) {
     return { allowed: true }
   }
 
+  // The real request origin is authoritative: require an Origin/Referer that
+  // matches the allowlist before trusting any claimed URL fields.
+  const requestOriginHost = getRequestOriginHost(req)
+  if (!requestOriginHost) {
+    return { allowed: false, error: 'Forbidden: missing Origin/Referer headers.' }
+  }
+  if (!effectiveHosts.has(requestOriginHost)) {
+    return { allowed: false, error: `Forbidden: request origin "${requestOriginHost}" is not allowed.` }
+  }
+
   const pageHost = getHostFromUrl(url)
   if (!pageHost) {
     return { allowed: false, error: 'Invalid tracking payload: url must be an absolute URL.' }
@@ -252,11 +311,6 @@ function validateTrackingAllowlist(req, { siteId, url, siteUrl }) {
   const declaredSiteHost = getHostFromUrl(siteUrl)
   if (declaredSiteHost && !effectiveHosts.has(declaredSiteHost)) {
     return { allowed: false, error: `Tracking denied for declared siteUrl host "${declaredSiteHost}".` }
-  }
-
-  const requestOriginHost = getRequestOriginHost(req)
-  if (requestOriginHost && !effectiveHosts.has(requestOriginHost)) {
-    return { allowed: false, error: `Tracking denied for request origin "${requestOriginHost}".` }
   }
 
   return { allowed: true }

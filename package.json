@@ -9,10 +9,11 @@
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "cors": "^2.8.6",
     "dotenv": "^17.3.1",
-    "express": "^5.2.1",
     "lucide-react": "^0.575.0",
     "mongodb": "^7.1.0",
     "react": "^19.2.4",

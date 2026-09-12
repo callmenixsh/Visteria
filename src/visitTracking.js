@@ -1,5 +1,6 @@
+import { getApiBaseUrl } from './config'
+
 const DUPLICATE_WINDOW_MS = 2000
-const API_BASE_URL = 'https://visteria.vercel.app'
 
 let lastTrackedUrl = ''
 let lastTrackedAt = 0
@@ -18,7 +19,9 @@ function getTrackingConfig(configOverride = {}) {
   const runtimeSiteId = overrideSiteId || runtimeConfig.siteId || ''
 
   return {
-    baseUrl: API_BASE_URL,
+    baseUrl:
+      String(configOverride.apiBaseUrl || runtimeConfig.apiBaseUrl || getApiBaseUrl()).trim() ||
+      getApiBaseUrl(),
     siteId:
       String(runtimeSiteId || getEnvValue('VITE_TRACKING_SITE_ID', 'TRACKING_SITE_ID')).trim() ||
       window.location.hostname,

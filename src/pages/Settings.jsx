@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react'
 import { Copy, Check } from 'lucide-react'
-
-const API_BASE_URL = 'https://visteria.vercel.app'
+import { getApiBaseUrl } from '../config'
 
 function buildTrackingSnippet(siteId, siteUrl) {
   const safeSiteId = siteId || 'your-site-id'
   const safeSiteUrl = siteUrl?.trim() || 'https://your-site.com'
+  const apiBaseUrl = getApiBaseUrl()
 
   return `<script type="module">
 (function() {
@@ -44,7 +44,7 @@ function buildTrackingSnippet(siteId, siteUrl) {
   
   sessionStorage.setItem('visteria_last_' + SITE_ID, now.toString());
   
-  fetch('${API_BASE_URL}/api/visits/track', {
+  fetch('${apiBaseUrl}/api/visits/track', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -28,14 +28,13 @@ function patchHistoryIfNeeded() {
 
 export function useVisitTracking(trackingConfig = {}) {
   const apiBaseUrl = trackingConfig.apiBaseUrl || ''
-  const apiKey = trackingConfig.apiKey || ''
   const siteId = trackingConfig.siteId || ''
 
   useEffect(() => {
     patchHistoryIfNeeded()
 
     const handleTrack = () => {
-      trackVisit({ apiBaseUrl, apiKey, siteId })
+      trackVisit({ apiBaseUrl, siteId })
     }
 
     handleTrack()
@@ -49,5 +48,5 @@ export function useVisitTracking(trackingConfig = {}) {
       window.removeEventListener('popstate', handleTrack)
       window.removeEventListener('hashchange', handleTrack)
     }
-  }, [apiBaseUrl, apiKey, siteId])
+  }, [apiBaseUrl, siteId])
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Users, Globe, Eye } from 'lucide-react'
 import { getApiBaseUrl } from '../config'
@@ -50,14 +50,11 @@ function MiniBars({ data }) {
 export default function Dashboard() {
   const [projects, setProjects] = useState([])
   const [trendMode, setTrendMode] = useState('year')
-  const [timeline, setTimeline] = useState(null)
   const [clientDates, setClientDates] = useState([])
   const [siteDaily, setSiteDaily] = useState(null)
   const [activeTrendPointIndex, setActiveTrendPointIndex] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const didInitialLoad = useRef(false)
-  const timelineReqRef = useRef(0)
 
   // Global stats come straight from the server aggregate (server-authoritative "today").
   const globalStats = useMemo(() => {
@@ -84,12 +81,8 @@ export default function Dashboard() {
     return { ...base, activeToday, earliestFirstSeen, avgVisitsPerVisitor }
   }, [projects])
 
-  // Server timeline points are preferred; fall back to client-computed points from
-  // fetched visitor data so the universal graph always renders.
-  const activePoints = useMemo(() => {
-    if (timeline?.points?.length) return timeline.points
-    return computePoints(clientDates, trendMode)
-  }, [timeline, clientDates, trendMode])
+  // Visit dates are fetched once; every trend mode is computed client-side from them.
+  const activePoints = useMemo(() => computePoints(clientDates, trendMode), [clientDates, trendMode])
 
   const trendData = useMemo(() => {
     const points = activePoints || []
@@ -131,15 +124,6 @@ export default function Dashboard() {
     setActiveTrendPointIndex(null)
   }, [trendMode, trendData?.points?.length])
 
-  useEffect(() => {
-    if (didInitialLoad.current) {
-      setTimeline(null)
-      fetchTimeline(trendMode)
-      return
-    }
-    didInitialLoad.current = true
-  }, [trendMode])
-
   async function loadData() {
     const apiKey = import.meta.env.VITE_TRACKING_API_KEY || ''
 
@@ -174,8 +158,6 @@ export default function Dashboard() {
         setSiteDaily(siteResult.dailyMap)
         setClientDates(siteResult.allDates)
       }
-
-      await fetchTimeline(trendMode)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load projects')
     } finally {
@@ -227,33 +209,6 @@ export default function Dashboard() {
     return { dailyMap, allDates }
   }
 
-  async function fetchTimeline(mode) {
-    const reqId = ++timelineReqRef.current
-    const apiKey = import.meta.env.VITE_TRACKING_API_KEY || ''
-    if (!apiKey) return false
-
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/api/timeline?mode=${encodeURIComponent(mode)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-        },
-      })
-
-      if (reqId !== timelineReqRef.current) return false
-      if (!response.ok) return false
-
-      const data = await response.json()
-      if (reqId !== timelineReqRef.current) return false
-      if (!data?.points?.length) return false
-      setTimeline(data)
-      return true
-    } catch {
-      return false
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -282,15 +237,19 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Global Trend Graph (universal) */}
-      {trendData && (
+      {projects.length > 0 && (
         <div className="bg-white dark:bg-white/[0.02] rounded-xl border border-black/[0.08] dark:border-white/[0.08] p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
               <div className="flex items-center justify-between gap-2 w-full">
                 <h2 className="text-sm font-medium text-black dark:text-white">Visit Trends</h2>
-                <p className="text-xs text-black/40 dark:text-white/40 whitespace-nowrap">Peak: <span className="text-black dark:text-white font-medium">{trendData.peakLabel}</span></p>
+                {trendData && (
+                  <p className="text-xs text-black/40 dark:text-white/40 whitespace-nowrap">Peak: <span className="text-black dark:text-white font-medium">{trendData.peakLabel}</span></p>
+                )}
               </div>
-              <p className="text-xs text-black/40 dark:text-white/40 mt-0.5">{trendData.subtitle}</p>
+              {trendData && (
+                <p className="text-xs text-black/40 dark:text-white/40 mt-0.5">{trendData.subtitle}</p>
+              )}
             </div>
             <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
               <div className="inline-flex items-center p-0.5 rounded-full bg-black/5 dark:bg-white/5 overflow-x-auto max-w-[260px] sm:max-w-none">
@@ -317,31 +276,39 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-          <TrendChart
-            points={trendData.points}
-            maxVisits={trendData.maxVisits}
-            activeIndex={activeTrendPointIndex}
-            onSelect={(i) => setActiveTrendPointIndex((prev) => (prev === i ? null : i))}
-          />
-          {globalStats.totalVisits === 0 && (
-            <p className="text-[11px] text-black/35 dark:text-white/35 text-center mt-3">
-              No visits recorded yet
-            </p>
+          {trendData ? (
+            <>
+              <TrendChart
+                points={trendData.points}
+                maxVisits={trendData.maxVisits}
+                activeIndex={activeTrendPointIndex}
+                onSelect={(i) => setActiveTrendPointIndex((prev) => (prev === i ? null : i))}
+              />
+              {globalStats.totalVisits === 0 && (
+                <p className="text-[11px] text-black/35 dark:text-white/35 text-center mt-3">
+                  No visits recorded yet
+                </p>
+              )}
+              <div className="hidden sm:flex justify-between text-[10px] text-black/40 dark:text-white/40 mt-3">
+                {trendData.tickIndexes.map((i) => (
+                  <span key={i} className={trendData.peakIndex === i ? 'text-black dark:text-white font-medium' : ''}>
+                    {trendData.points[i]?.shortLabel}
+                  </span>
+                ))}
+              </div>
+              <div className="flex sm:hidden justify-between text-[10px] text-black/40 dark:text-white/40 mt-3">
+                {[0, Math.floor((trendData.points.length - 1) / 2), trendData.points.length - 1].map((i) => (
+                  <span key={i} className={trendData.peakIndex === i ? 'text-black dark:text-white font-medium' : ''}>
+                    {trendData.points[i]?.shortLabel}
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="h-44 sm:h-52 flex flex-col items-center justify-center gap-1">
+              <p className="text-xs text-black/40 dark:text-white/40">No trend data available</p>
+            </div>
           )}
-          <div className="hidden sm:flex justify-between text-[10px] text-black/40 dark:text-white/40 mt-3">
-            {trendData.tickIndexes.map((i) => (
-              <span key={i} className={trendData.peakIndex === i ? 'text-black dark:text-white font-medium' : ''}>
-                {trendData.points[i]?.shortLabel}
-              </span>
-            ))}
-          </div>
-          <div className="flex sm:hidden justify-between text-[10px] text-black/40 dark:text-white/40 mt-3">
-            {[0, Math.floor((trendData.points.length - 1) / 2), trendData.points.length - 1].map((i) => (
-              <span key={i} className={trendData.peakIndex === i ? 'text-black dark:text-white font-medium' : ''}>
-                {trendData.points[i]?.shortLabel}
-              </span>
-            ))}
-          </div>
         </div>
       )}
 

@@ -23,21 +23,19 @@ export function computePoints(dates, mode, now = new Date()) {
 
   if (mode === 'all') {
     if (!dates.length) return []
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000
     const earliest = new Date(Math.min(...dates.map((date) => date.getTime())))
-    const monthStart = new Date(earliest.getFullYear(), earliest.getMonth(), 1)
-    const months =
-      (now.getFullYear() - monthStart.getFullYear()) * 12 +
-      (now.getMonth() - monthStart.getMonth()) +
-      1
+    const weekStart = new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate()).getTime()
 
-    for (let i = 0; i < months; i++) {
-      const date = new Date(monthStart.getFullYear(), monthStart.getMonth() + i, 1)
-      const nextDate = new Date(monthStart.getFullYear(), monthStart.getMonth() + i + 1, 1)
+    for (let t = weekStart; t <= now.getTime(); t += WEEK_MS) {
+      const date = new Date(t)
+      const nextDate = new Date(t + WEEK_MS)
       const monthLabel = date.toLocaleDateString('en-US', { month: 'short' })
+      const dayLabel = date.toLocaleDateString('en-US', { day: 'numeric' })
       points.push({
-        label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        shortLabel: monthLabel,
-        peakLabel: `${monthLabel}-${date.getFullYear()}`,
+        label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        shortLabel: `${monthLabel} ${dayLabel}`,
+        peakLabel: `${monthLabel} ${dayLabel} ${date.getFullYear()}`,
         visits: countInRange(date, nextDate),
       })
     }

@@ -194,7 +194,7 @@ export default function Dashboard() {
     const dailyMap = {}
     const allDates = []
     for (const result of results) {
-      if (!result.length) continue
+      if (!result || !result.visitors || !result.visitors.length) continue
       const dates = []
       for (const visitor of result.visitors) {
         for (const visit of visitor.visits || []) {

@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink, Users, Globe } from 'lucide-react'
 import { getApiBaseUrl } from '../config'
 import TrendChart from '../components/TrendChart'
 import HeatmapCard from '../components/HeatmapCard'
+import { weekLabels } from '../lib/trend'
 
 function isToday(date) {
   const today = new Date()
@@ -238,24 +239,29 @@ export default function SiteDetail() {
     const topReferrers = topBreakdown(allVisits, (visit) => getReferrerHost(visit.referrer))
     const maxReferrerVisits = Math.max(...topReferrers.map((entry) => entry.count), 1)
 
-    // Yearly trend (last 12 months)
+    // Yearly trend (52 weekly buckets over the last year)
     const now = new Date()
+    const MS_IN_DAY = 24 * 60 * 60 * 1000
+    const WEEK_MS = 7 * MS_IN_DAY
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const anchor = todayMidnight - new Date(todayMidnight).getDay() * MS_IN_DAY
+    const start = anchor - 51 * WEEK_MS
     const last12Months = []
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
-      
-      const monthVisitsCount = allVisits.filter(v => v.date >= date && v.date < nextDate).length
+    for (let i = 0; i < 52; i++) {
+      const date = new Date(start + i * WEEK_MS)
+      const nextDate = new Date(start + (i + 1) * WEEK_MS)
+      const labels = weekLabels(date, nextDate)
       last12Months.push({
         date,
-        label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        shortLabel: date.toLocaleDateString('en-US', { month: 'short' }),
-        visits: monthVisitsCount,
+        label: labels.label,
+        shortLabel: labels.shortLabel,
+        peakLabel: labels.peakLabel,
+        visits: allVisits.filter(v => v.date >= date && v.date < nextDate).length,
       })
     }
     const maxYearlyVisits = Math.max(...last12Months.map(d => d.visits), 1)
     const peakMonthIndex = last12Months.findIndex(d => d.visits === maxYearlyVisits)
-    const peakMonth = last12Months[peakMonthIndex]?.shortLabel || ''
+    const peakMonth = last12Months[peakMonthIndex]?.peakLabel || ''
 
     // Recent visitors (last 5)
     const recentVisitors = sortedByLast.slice(0, 5)
@@ -463,11 +469,14 @@ export default function SiteDetail() {
               />
             </div>
             <div className="flex justify-between text-[10px] text-black/40 dark:text-white/40 mt-2">
-              {[0, 2, 4, 6, 8, 10].map((i) => (
-                <span key={i} className={stats.peakMonthIndex === i ? 'text-black dark:text-white font-medium' : ''}>
-                  {stats.last12Months[i].shortLabel}
-                </span>
-              ))}
+              {[0, 1, 2, 3, 4, 5].map((k) => {
+                const i = Math.round((k * (stats.last12Months.length - 1)) / 5)
+                return (
+                  <span key={i} className={stats.peakMonthIndex === i ? 'text-black dark:text-white font-medium' : ''}>
+                    {stats.last12Months[i].shortLabel}
+                  </span>
+                )
+              })}
             </div>
           </div>
 

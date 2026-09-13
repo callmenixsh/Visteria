@@ -1,5 +1,23 @@
 export const TREND_MODES = ['all', 'year', 'month', 'week', 'day']
 
+const MS_IN_DAY = 24 * 60 * 60 * 1000
+const WEEK_MS = 7 * MS_IN_DAY
+
+function sundayOfWeek(midnightMs) {
+  return midnightMs - new Date(midnightMs).getDay() * MS_IN_DAY
+}
+
+export function weekLabels(date, nextDate) {
+  const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const endDate = new Date(nextDate.getTime() - MS_IN_DAY)
+  const span = `${fmt(date)} – ${fmt(endDate)}`
+  return {
+    label: span,
+    shortLabel: fmt(date),
+    peakLabel: span,
+  }
+}
+
 export function getStartDate(mode, now) {
   switch (mode) {
     case 'all':
@@ -23,34 +41,29 @@ export function computePoints(dates, mode, now = new Date()) {
 
   if (mode === 'all') {
     if (!dates.length) return []
-    const WEEK_MS = 7 * 24 * 60 * 60 * 1000
     const earliest = new Date(Math.min(...dates.map((date) => date.getTime())))
-    const weekStart = new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate()).getTime()
+    const earliestMidnight = new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate()).getTime()
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
 
-    for (let t = weekStart; t <= now.getTime(); t += WEEK_MS) {
-      const date = new Date(t)
-      const nextDate = new Date(t + WEEK_MS)
-      const monthLabel = date.toLocaleDateString('en-US', { month: 'short' })
-      const dayLabel = date.toLocaleDateString('en-US', { day: 'numeric' })
+    for (let weekStart = sundayOfWeek(earliestMidnight); weekStart <= sundayOfWeek(todayMidnight); weekStart += WEEK_MS) {
+      const date = new Date(weekStart)
+      const nextDate = new Date(weekStart + WEEK_MS)
       points.push({
-        label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        shortLabel: `${monthLabel} ${dayLabel}`,
-        peakLabel: `${monthLabel} ${dayLabel} ${date.getFullYear()}`,
+        ...weekLabels(date, nextDate),
         visits: countInRange(date, nextDate),
       })
     }
   }
 
   if (mode === 'year') {
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
-      const monthLabel = date.toLocaleDateString('en-US', { month: 'short' })
-      const yearLabel = date.getFullYear()
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const anchor = sundayOfWeek(todayMidnight)
+    const start = anchor - 51 * WEEK_MS
+    for (let i = 0; i < 52; i++) {
+      const date = new Date(start + i * WEEK_MS)
+      const nextDate = new Date(start + (i + 1) * WEEK_MS)
       points.push({
-        label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        shortLabel: monthLabel,
-        peakLabel: `${monthLabel}-${yearLabel}`,
+        ...weekLabels(date, nextDate),
         visits: countInRange(date, nextDate),
       })
     }

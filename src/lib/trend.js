@@ -1,1 +1,1 @@
-export { TREND_MODES, computePoints } from '../../api/_lib/trend.js'
+export { TREND_MODES, computePoints, weekLabels } from '../../api/_lib/trend.js'

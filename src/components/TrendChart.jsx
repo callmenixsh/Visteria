@@ -147,7 +147,7 @@ export default function TrendChart({
             style={{ left: `${xPct(shownIndex)}%` }}
           />
           <div
-            className="absolute w-2.5 h-2.5 rounded-full bg-current ring-4 ring-black/10 dark:ring-white/10 pointer-events-none"
+            className="absolute w-2.5 h-2.5 rounded-full bg-current ring-4 ring-black/10 dark:ring-white/10 pointer-events-none -translate-x-1/2 -translate-y-1/2"
             style={{ left: `${xPct(shownIndex)}%`, top: `${yPct(points[shownIndex].visits, axisMax)}%` }}
           />
         </>

@@ -66,7 +66,6 @@ export default async function handler(req, res) {
       $setOnInsert: {
         siteId: safeSiteId,
         visitorHash,
-        visitCount: 0,
         firstSeenAt: new Date(),
       },
       $set: {

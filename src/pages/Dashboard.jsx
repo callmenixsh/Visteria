@@ -28,7 +28,7 @@ function MiniBars({ data }) {
   const max = Math.max(...data, 1)
   const barMax = 44
   return (
-    <div className="flex items-end gap-[3px] text-black dark:text-white" aria-hidden>
+    <div className="flex items-end gap-[3px] h-11 text-black dark:text-white" aria-hidden>
       {data.map((value, i) => {
         const height = value > 0 ? Math.max(3, Math.round((value / max) * barMax)) : 2
         const pct = value > 0 ? 30 + Math.round((value / max) * 60) : 10
@@ -53,6 +53,7 @@ export default function Dashboard() {
   const [clientDates, setClientDates] = useState([])
   const [siteDaily, setSiteDaily] = useState(null)
   const [activeTrendPointIndex, setActiveTrendPointIndex] = useState(null)
+  const [siteToday, setSiteToday] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -80,6 +81,20 @@ export default function Dashboard() {
 
     return { ...base, activeToday, earliestFirstSeen, avgVisitsPerVisitor }
   }, [projects])
+
+  // "Today" is bucketed in the browser's local day, matching the site detail
+  // page. The server's /api/projects "todayVisits" uses the server (UTC) day.
+  const localToday = useMemo(() => {
+    if (!siteToday) return null
+    return Object.entries(siteToday).reduce(
+      (acc, [siteId, count]) => ({
+        totalVisits: acc.totalVisits + count,
+        activeSites: acc.activeSites + (count > 0 ? 1 : 0),
+        bySiteId: { ...acc.bySiteId, [siteId]: count },
+      }),
+      { totalVisits: 0, activeSites: 0, bySiteId: {} }
+    )
+  }, [siteToday])
 
   // Visit dates are fetched once; every trend mode is computed client-side from them.
   const activePoints = useMemo(() => computePoints(clientDates, trendMode), [clientDates, trendMode])
@@ -156,6 +171,7 @@ export default function Dashboard() {
       const siteResult = await fetchSiteVisuals(list)
       if (siteResult) {
         setSiteDaily(siteResult.dailyMap)
+        setSiteToday(siteResult.todayMap)
         setClientDates(siteResult.allDates)
       }
     } catch (err) {
@@ -192,6 +208,7 @@ export default function Dashboard() {
     )
 
     const dailyMap = {}
+    const todayMap = {}
     const allDates = []
     for (const result of results) {
       if (!result || !result.visitors || !result.visitors.length) continue
@@ -202,11 +219,13 @@ export default function Dashboard() {
           if (!Number.isNaN(date.getTime())) dates.push(date)
         }
       }
-      dailyMap[result.siteId] = bucketDaily(dates, 14)
+      const bucket = bucketDaily(dates, 14)
+      dailyMap[result.siteId] = bucket
+      todayMap[result.siteId] = bucket[bucket.length - 1] || 0
       allDates.push(...dates)
     }
 
-    return { dailyMap, allDates }
+    return { dailyMap, todayMap, allDates }
   }
 
   if (loading) {
@@ -314,8 +333,10 @@ export default function Dashboard() {
 
       {/* Stat cards */}
       {projects.length > 0 && (() => {
+        const todayTotal = localToday?.totalVisits ?? globalStats.todayVisits
+        const activeToday = localToday?.activeSites ?? globalStats.activeToday
         const todayShare = globalStats.totalVisits
-          ? Math.round((globalStats.todayVisits / globalStats.totalVisits) * 100)
+          ? Math.round((todayTotal / globalStats.totalVisits) * 100)
           : 0
         return (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -324,7 +345,7 @@ export default function Dashboard() {
                 <Eye className="w-4 h-4 text-black/40 dark:text-white/40" />
                 <span className="text-xs font-medium text-black/50 dark:text-white/50">Today</span>
               </div>
-              <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{globalStats.todayVisits}</p>
+              <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{todayTotal}</p>
               <div className="mt-2.5">
                 <div className="flex justify-between text-[10px] text-black/40 dark:text-white/40 mb-1">
                   <span>{todayShare}% of all-time</span>
@@ -362,7 +383,7 @@ export default function Dashboard() {
                 <span className="text-xs font-medium text-black/50 dark:text-white/50">Sites</span>
               </div>
               <p className="text-2xl font-semibold tabular-nums text-black dark:text-white">{globalStats.totalSites}</p>
-              <p className="mt-2.5 text-[10px] text-black/40 dark:text-white/40">{globalStats.activeToday} active today</p>
+              <p className="mt-2.5 text-[10px] text-black/40 dark:text-white/40">{activeToday} active today</p>
             </div>
           </div>
         )
@@ -405,7 +426,7 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2">
                   <Eye className="w-3.5 h-3.5 text-black/30 dark:text-white/30" />
                   <div>
-                    <p className="text-lg font-semibold tabular-nums text-black dark:text-white leading-tight">{project.todayVisits || 0}</p>
+                    <p className="text-lg font-semibold tabular-nums text-black dark:text-white leading-tight">{localToday?.bySiteId[project.siteId] ?? 0}</p>
                     <p className="text-[10px] text-black/40 dark:text-white/40">Today</p>
                   </div>
                 </div>
